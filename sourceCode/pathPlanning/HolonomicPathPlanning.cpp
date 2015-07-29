@@ -44,6 +44,7 @@
 #include "HolonomicRRT.h"
 #include "HolonomicBiRRT.h"
 #include "HolonomicRRTstar.h"
+#include "RRGstar.h"
 #include "HolonomicPathPlanning.h"
 #include "pathPlanningInterface.h"
 #include "v_repLib.h"
@@ -67,8 +68,8 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
 
   char planner_type[16], option_type[32];
   float option_value;
-  fscanf(aux_fp, "%s", planner_type);
 
+  fscanf(aux_fp, "%s", planner_type);
   if (!strcmp(planner_type, "RRT")) { // Naive RRT
     HolonomicRRT* rrt = new HolonomicRRT(theStartDummyID, theGoalDummyID,
                                          theRobotCollectionID, theObstacleCollectionID, ikGroupID,
@@ -118,12 +119,22 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
       fprintf(stderr, "Following options are ignored, %s : %f\n", option_type, option_value);
     }
 
-    ptrPlanner = rrt_star;
-    printf("%s\n", "HolonomicRRT* loaded");
-  } else {
-    fprintf(stderr, "%s\n", "Undefined planner type");
-    return;
-  }
+		ptrPlanner = rrt_star;
+		printf("%s\n", "HolonomicRRT* loaded");
+	} else if (!strcmp(planner_type, "RRG*")) { // RRG*
+		RRGstar* rrg_star = new RRGstar(theStartDummyID, theGoalDummyID,
+				theRobotCollectionID, theObstacleCollectionID, ikGroupID,
+				thePlanningType, theAngularCoeff,
+				theStepSize,
+				theSearchMinVal, theSearchRange,
+				theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
+
+		ptrPlanner = rrg_star;
+		printf("%s\n", "HolonomicRRG* loaded");
+	} else {
+		fprintf(stderr, "%s\n", "Undefined planner type");
+		return;
+	}
 }
 
 CHolonomicPathPlanning::~CHolonomicPathPlanning() {

@@ -43,54 +43,54 @@
 
 #pragma once
 
-#include "PathPlanning.h"
 #include "HolonomicPathNode.h"
-#include "dummyClasses.h"
-#include <vector>
+#include "3Vector.h"
 #include "4Vector.h"
 #include "7Vector.h"
+#include <vector>
 
-class CHolonomicPathPlanning : public CPathPlanning  
+class RRGstarNode : public CHolonomicPathNode
 {
 public:
-	CHolonomicPathPlanning() {};
-	CHolonomicPathPlanning(int theStartDummyID,int theGoalDummyID,
-							int theRobotCollectionID,int theObstacleCollectionID,int ikGroupID,
-							int thePlanningType,float theAngularCoeff,
-							float theStepSize,
-							const float theSearchMinVal[4],const float theSearchRange[4],
-							const int theDirectionConstraints[4],const float clearanceAndMaxDistance[2],const C3Vector& gammaAxis);
-	virtual ~CHolonomicPathPlanning();
+  class Edge {
+  public:
+    Edge(RRGstarNode* n, float c) {
+      _node = n; _cost = c;
+    }
+    RRGstarNode* node() { return _node; }
+    float cost() { return _cost; }
+    void cost(float c) { _cost = c; }
+  private:
+    RRGstarNode* _node;
+    float _cost;
+  };
+public:
+  RRGstarNode(const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
+  RRGstarNode(int theType,const C7Vector& conf,const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
+  RRGstarNode(int theType,float searchMin[4],float searchRange[4],const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
+  virtual ~RRGstarNode();
+  virtual RRGstarNode* copyYourself();
 
-	// Following functions are inherited from CPathPlanning:
-	virtual int searchPath(int maxTimePerPass);
-	virtual bool setPartialPath();
-	virtual int smoothFoundPath(int steps,int maxTimePerPass);
-	virtual void getPathData(std::vector<float>& data);
+  // <Set/Getters
+  void setCost(float cost) { _cost = cost; }
+  float getCost() { return _cost; }
 
-	virtual void getSearchTreeData(std::vector<float>& data,bool fromStart);
+  void addNode(RRGstarNode* node, float cost) { _nodes.push_back(Edge(node, cost)); }
+  void removeNode(RRGstarNode* node);
+  // >
+  // for shortestpath computation
+  RRGstarNode* pred;
 
-	virtual void setAngularCoefficient(float coeff);
-	virtual void setStepSize(float size);
+  float f;
+  float d;
+  int color;
 
-	std::vector<CHolonomicPathNode*> fromStart;
-	std::vector<CHolonomicPathNode*> fromGoal;
-	std::vector<CHolonomicPathNode*> foundPath;
+  // Increasing order for priority queue
+  bool operator < (const RRGstarNode& node) const {
+    return this->f > node.f;
+  }
+  std::vector<Edge> _nodes;
 
 private:
-	virtual bool doCollide(float* dist);
-
-	virtual bool addVector(C3Vector& pos,C4Vector& orient,float vect[7]);
-	virtual bool areDirectionConstraintsRespected(float vect[7]);
-	virtual bool areSomeValuesForbidden(float values[7]);
-
-	C4Vector _gammaAxisRotation;
-	C4Vector _gammaAxisRotationInv;
-
-	C7Vector _startDummyCTM;
-	C7Vector _startDummyLTM;
-
-	std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
-
-	CHolonomicPathPlanning* ptrPlanner;
+  float _cost;
 };

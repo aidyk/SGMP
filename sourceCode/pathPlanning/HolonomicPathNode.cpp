@@ -71,33 +71,33 @@ CHolonomicPathNode::CHolonomicPathNode(int theType, float searchMin[4], float se
   _nodeType = theType;
   values = NULL;
 
-	if (theType == sim_holonomicpathplanning_xy) {
-		values = new float[2];
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-	} else if (theType == sim_holonomicpathplanning_xyz) {
-		values = new float[3];
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
-	} else if (theType == sim_holonomicpathplanning_xyg) {
-		values = new float[3];
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = CPathPlanningInterface::getNormalizedAngle(searchMin[3] + searchRange[3] * SIM_RAND_FLOAT);
-	} else if (theType == sim_holonomicpathplanning_xyzabg) {
-		values = new float[7];
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
+  if (theType == sim_holonomicpathplanning_xy) {
+    values = new float[2];
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+  } else if (theType == sim_holonomicpathplanning_xyz) {
+    values = new float[3];
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+    values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
+  } else if (theType == sim_holonomicpathplanning_xyg) {
+    values = new float[3];
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+    values[2] = CPathPlanningInterface::getNormalizedAngle( + searchRange[3] * SIM_RAND_FLOAT);
+  } else if (theType == sim_holonomicpathplanning_xyzabg) {
+    values = new float[7];
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+    values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
 
-		C4Vector d;
-		d.buildRandomOrientation();
-		values[3] = d(0);
-		values[4] = d(1);
-		values[5] = d(2);
-		values[6] = d(3);
-	}
+    C4Vector d;
+    d.buildRandomOrientation();
+    values[3] = d(0);
+    values[4] = d(1);
+    values[5] = d(2);
+    values[6] = d(3);
+  }
 }
 
 CHolonomicPathNode::~CHolonomicPathNode() {
@@ -105,29 +105,29 @@ CHolonomicPathNode::~CHolonomicPathNode() {
 }
 
 void CHolonomicPathNode::reSample(int theType, float searchMin[4], float searchRange[4]) {
-	if (theType == sim_holonomicpathplanning_xy) {
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-	} else if (theType == sim_holonomicpathplanning_xyz) {
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
-	} else if (theType == sim_holonomicpathplanning_xyg) {
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = CPathPlanningInterface::getNormalizedAngle(searchMin[3] + searchRange[3] * SIM_RAND_FLOAT);
-	} else if (theType == sim_holonomicpathplanning_xyzabg) {
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
+  if (theType == sim_holonomicpathplanning_xy) {
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+  } else if (theType == sim_holonomicpathplanning_xyz) {
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+    values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
+  } else if (theType == sim_holonomicpathplanning_xyg) {
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+    values[2] = CPathPlanningInterface::getNormalizedAngle(searchMin[3] + searchRange[3] * SIM_RAND_FLOAT);
+  } else if (theType == sim_holonomicpathplanning_xyzabg) {
+    values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+    values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+    values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
 
-		C4Vector d;
-		d.buildRandomOrientation();
-		values[3] = d(0);
-		values[4] = d(1);
-		values[5] = d(2);
-		values[6] = d(3);
-	}
+    C4Vector d;
+    d.buildRandomOrientation();
+    values[3] = d(0);
+    values[4] = d(1);
+    values[5] = d(2);
+    values[6] = d(3);
+  }
 }
 
 void CHolonomicPathNode::setAllValues(const C3Vector& pos, const C4Vector& orient) {

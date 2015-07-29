@@ -41,14 +41,14 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
-#include "HolonomicRRT.h"
+#include "HolonomicPRM.h"
 #include "pathPlanningInterface.h"
 #include "v_repLib.h"
 
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
 
-HolonomicRRT::HolonomicRRT(int theStartDummyID, int theGoalDummyID,
+HolonomicPRM::HolonomicPRM(int theStartDummyID, int theGoalDummyID,
                                int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
                                int thePlanningType, float theAngularCoeff,
                                float theStepSize,
@@ -91,8 +91,8 @@ HolonomicRRT::HolonomicRRT(int theStartDummyID, int theGoalDummyID,
   C7Vector sConf;
   sConf.setIdentity();
 
-  HolonomicRRTNode* start_node = new HolonomicRRTNode(planningType, sConf, _gammaAxisRotation, _gammaAxisRotationInv);
-  HolonomicRRTNode* goal_node = new HolonomicRRTNode(planningType, goalDummyLocalConf, _gammaAxisRotation, _gammaAxisRotationInv);
+  HolonomicPRMNode* start_node = new HolonomicPRMNode(planningType, sConf, _gammaAxisRotation, _gammaAxisRotationInv);
+  HolonomicPRMNode* goal_node = new HolonomicPRMNode(planningType, goalDummyLocalConf, _gammaAxisRotation, _gammaAxisRotationInv);
 	fromStart.push_back(start_node);
   fromGoal.push_back(goal_node);
 
@@ -118,7 +118,7 @@ HolonomicRRT::HolonomicRRT(int theStartDummyID, int theGoalDummyID,
   invalidData = false;
 }
 
-HolonomicRRT::~HolonomicRRT() {
+HolonomicPRM::~HolonomicPRM() {
   for (int i = 0; i < int(fromStart.size()); i++)
     delete fromStart[i];
   fromStart.clear();
@@ -130,15 +130,15 @@ HolonomicRRT::~HolonomicRRT() {
   foundPath.clear();
 }
 
-void HolonomicRRT::setAngularCoefficient(float coeff) {
+void HolonomicPRM::setAngularCoefficient(float coeff) {
   angularCoeff = coeff;
 }
 
-void HolonomicRRT::setStepSize(float size) {
+void HolonomicPRM::setStepSize(float size) {
   stepSize = size;
 }
 
-float HolonomicRRT::distance(HolonomicRRTNode* a, HolonomicRRTNode* b) {
+float HolonomicPRM::distance(HolonomicPRMNode* a, HolonomicPRMNode* b) {
   float dist = 0.0;
   if (planningType == sim_holonomicpathplanning_xyz) {
     float vect[3];
@@ -163,10 +163,10 @@ float HolonomicRRT::distance(HolonomicRRTNode* a, HolonomicRRTNode* b) {
   return sqrt(dist);
 }
 
-std::vector<HolonomicRRTNode*> HolonomicRRT::getNearNeighborNodes(std::vector<HolonomicRRTNode*>& nodes,
-		HolonomicRRTNode* query, float radius) {
-  std::vector<HolonomicRRTNode*> neighbors;
-  nodes.push_back(static_cast<HolonomicRRTNode*>(fromGoal[0]));
+std::vector<HolonomicPRMNode*> HolonomicPRM::getNearNeighborNodes(std::vector<HolonomicPRMNode*>& nodes,
+		HolonomicPRMNode* query, float radius) {
+  std::vector<HolonomicPRMNode*> neighbors;
+  nodes.push_back(static_cast<HolonomicPRMNode*>(fromGoal[0]));
 
   if (planningType == sim_holonomicpathplanning_xy) {
     for (int i = 0; i < int(nodes.size()); i++) {
@@ -309,10 +309,10 @@ std::vector<HolonomicRRTNode*> HolonomicRRT::getNearNeighborNodes(std::vector<Ho
   return neighbors;
 }
 
-void HolonomicRRT::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
-  std::vector<HolonomicRRTNode*>* cont;
+void HolonomicPRM::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
+  std::vector<HolonomicPRMNode*>* cont;
   if (fromTheStart)
-		cont = reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromStart);
+		cont = reinterpret_cast<std::vector<HolonomicPRMNode*>*>(&fromStart);
   else
 		return;
 
@@ -355,7 +355,7 @@ void HolonomicRRT::getSearchTreeData(std::vector<float>& data, bool fromTheStart
   }
 }
 
-int HolonomicRRT::searchPath(int maxTimePerPass) {
+int HolonomicPRM::searchPath(int maxTimePerPass) {
   // maxTimePerPass is in miliseconds
   if (invalidData)
     return(0);
@@ -377,14 +377,14 @@ int HolonomicRRT::searchPath(int maxTimePerPass) {
   if (maxTimePerPass == 131183)
     return(61855195);
 
-  std::vector<HolonomicRRTNode*>* current =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromStart);
-  std::vector<HolonomicRRTNode*>* from_goal =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromGoal);
+  std::vector<HolonomicPRMNode*>* current =
+    reinterpret_cast<std::vector<HolonomicPRMNode*>*>(&fromStart);
+  std::vector<HolonomicPRMNode*>* from_goal =
+    reinterpret_cast<std::vector<HolonomicPRMNode*>*>(&fromGoal);
 
   int foundAPath = 0;
   int initTime = simGetSystemTimeInMs(-1);
-  HolonomicRRTNode* randNode = new HolonomicRRTNode(planningType, _searchMinVal, _searchRange, _gammaAxisRotation, _gammaAxisRotationInv);
+  HolonomicPRMNode* randNode = new HolonomicPRMNode(planningType, _searchMinVal, _searchRange, _gammaAxisRotation, _gammaAxisRotationInv);
   bool isGoalBiased = false;
   while (_simGetTimeDiffInMs(initTime) < maxTimePerPass) {
     if (_goalBias < SIM_RAND_FLOAT) { // Sample goal configuration.
@@ -395,24 +395,24 @@ int HolonomicRRT::searchPath(int maxTimePerPass) {
       randNode->reSample(planningType, _searchMinVal, _searchRange);
     }
 
-    // HolonomicRRTNode* closest = getClosestNode(*search_tree, randNode);
-    HolonomicRRTNode* closest = getClosestNode(*current, randNode);
+    // HolonomicPRMNode* closest = getClosestNode(*search_tree, randNode);
+    HolonomicPRMNode* closest = getClosestNode(*current, randNode);
     float artificialCost, cArtificialCost;
     if (closest == NULL) continue;
 
-    HolonomicRRTNode* extended = extend(closest, randNode, isGoalBiased, startDummy, cArtificialCost);
+    HolonomicPRMNode* extended = extend(closest, randNode, isGoalBiased, startDummy, cArtificialCost);
     if (extended == NULL) continue;
 
     extended->parent = closest;
-    extended->setCost(static_cast<HolonomicRRTNode*>(extended->parent)->getCost() + cArtificialCost);
+    extended->setCost(static_cast<HolonomicPRMNode*>(extended->parent)->getCost() + cArtificialCost);
     fromStart.push_back(extended);
 
     if (isGoalBiased) {
-      HolonomicRRTNode* it = extended;
+      HolonomicPRMNode* it = extended;
 
       while (it != NULL) {
         foundPath.insert(foundPath.begin(), it->copyYourself());
-        it = static_cast<HolonomicRRTNode*>(it->parent);
+        it = static_cast<HolonomicPRMNode*>(it->parent);
       }
       foundAPath = true;
       break;
@@ -429,20 +429,20 @@ int HolonomicRRT::searchPath(int maxTimePerPass) {
 }
 
 // 'it' should be connected to the root node and has proper cost
-bool HolonomicRRT::gotPotential(HolonomicRRTNode* it) {
-  HolonomicRRTNode* goal_conf = static_cast<HolonomicRRTNode*>(fromGoal[0]);
+bool HolonomicPRM::gotPotential(HolonomicPRMNode* it) {
+  HolonomicPRMNode* goal_conf = static_cast<HolonomicPRMNode*>(fromGoal[0]);
   if (goal_conf->getCost() >= SIM_MAX_FLOAT || (distance(goal_conf, it) + it->getCost() < goal_conf->getCost())) {
     return true;
   }
   return false;
 }
 
-bool HolonomicRRT::setPartialPath() {
-  std::vector<HolonomicRRTNode*>* from_start =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromStart);
-  std::vector<HolonomicRRTNode*>* from_goal =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromGoal);
-  HolonomicRRTNode* it = (*from_goal)[0];
+bool HolonomicPRM::setPartialPath() {
+  std::vector<HolonomicPRMNode*>* from_start =
+    reinterpret_cast<std::vector<HolonomicPRMNode*>*>(&fromStart);
+  std::vector<HolonomicPRMNode*>* from_goal =
+    reinterpret_cast<std::vector<HolonomicPRMNode*>*>(&fromGoal);
+  HolonomicPRMNode* it = (*from_goal)[0];
 
   // Our goal is never gonna be included in our serach_tree(fromStart)
   // Thus it is necessary to manually set up the path
@@ -453,13 +453,13 @@ bool HolonomicRRT::setPartialPath() {
 
   while (it != NULL) {
     foundPath.insert(foundPath.begin(), it->copyYourself());
-    it = static_cast<HolonomicRRTNode*>(it->parent);
+    it = static_cast<HolonomicPRMNode*>(it->parent);
   }
 
   return(true);
 }
 
-HolonomicRRTNode* HolonomicRRT::getClosestNode(std::vector<HolonomicRRTNode*>& nodes, HolonomicRRTNode* sample) {
+HolonomicPRMNode* HolonomicPRM::getClosestNode(std::vector<HolonomicPRMNode*>& nodes, HolonomicPRMNode* sample) {
   float minD = SIM_MAX_FLOAT;
   int index = -1;
 
@@ -604,16 +604,16 @@ HolonomicRRTNode* HolonomicRRT::getClosestNode(std::vector<HolonomicRRTNode*>& n
   return(NULL);
 }
 
-HolonomicRRTNode* HolonomicRRT::slerp(HolonomicRRTNode* from, HolonomicRRTNode* to, float t) {
+HolonomicPRMNode* HolonomicPRM::slerp(HolonomicPRMNode* from, HolonomicPRMNode* to, float t) {
   return to;
 }
 
-HolonomicRRTNode* HolonomicRRT::extend(HolonomicRRTNode* from, HolonomicRRTNode* to,
+HolonomicPRMNode* HolonomicPRM::extend(HolonomicPRMNode* from, HolonomicPRMNode* to,
                                                bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost) {
   // Return value is != NULL if extention was performed and connect is false
   // If connect is true, then return value indicates that connection can be performed!
-  HolonomicRRTNode* extended = from->copyYourself();
-  float theVect[7] = {0.0, };
+  HolonomicPRMNode* extended = from->copyYourself();
+  float theVect[7] = {0.0, }, rotation = 0.0f;
   int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
   int currentPass;
 
@@ -668,7 +668,7 @@ HolonomicRRTNode* HolonomicRRT::extend(HolonomicRRTNode* from, HolonomicRRTNode*
   return(NULL);
 }
 
-int HolonomicRRT::getVector(HolonomicRRTNode* fromPoint, HolonomicRRTNode* toPoint, float vect[7], float e, float& artificialLength, bool dontDivide) {
+int HolonomicPRM::getVector(HolonomicPRMNode* fromPoint, HolonomicPRMNode* toPoint, float vect[7], float e, float& artificialLength, bool dontDivide) {
 	// if direction constraints are not respected, return value is -1 and vect does not contain anything
 	// Otherwise return value is the number of times we have to add 'vect' to 'fromPoint' to reach 'toPoint'
 	int retVal = -1;
@@ -872,7 +872,7 @@ int HolonomicRRT::getVector(HolonomicRRTNode* fromPoint, HolonomicRRTNode* toPoi
 	return(retVal);
 }
 
-bool HolonomicRRT::addVector(C3Vector& pos, C4Vector& orient, float vect[7]) {
+bool HolonomicPRM::addVector(C3Vector& pos, C4Vector& orient, float vect[7]) {
 	// return value true means values are not forbidden!
 	float auxVect[7];
 	if (planningType == sim_holonomicpathplanning_xy) {
@@ -948,7 +948,7 @@ bool HolonomicRRT::addVector(C3Vector& pos, C4Vector& orient, float vect[7]) {
 	return(!areSomeValuesForbidden(auxVect));
 }
 
-int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
+int HolonomicPRM::smoothFoundPath(int steps, int maxTimePerPass) {
   // step specifies the number of passes (each pass is composed by a calculated sub-pass, and some random sub-pass)
   // We first copy foundPath:
   if (steps < 2)
@@ -980,8 +980,8 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
       return(-1); // we are not yet finished, but we did enough for the time we had
     numberOfRandomConnectionTriesLeft_forSteppedSmoothing--;
     int lowIndex, highIndex;
-    HolonomicRRTNode* startP;
-    HolonomicRRTNode* endP;
+    HolonomicPRMNode* startP;
+    HolonomicPRMNode* endP;
     for (int randomPass = 0; randomPass < 5; randomPass++) {
       // If randomPass==0, the pass is not random, i.e. the low and high indices are calculated
       startP = NULL; // added on 2010/09/09
@@ -1002,8 +1002,8 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
           highIndex--;
         if (foundPathSameStraightLineID_forSteppedSmoothing[lowIndex] != foundPathSameStraightLineID_forSteppedSmoothing[highIndex]) {
           // otherwise this pass is skipped!
-          startP = static_cast<HolonomicRRTNode*>(foundPath[lowIndex]);
-          endP = static_cast<HolonomicRRTNode*>(foundPath[highIndex]);
+          startP = static_cast<HolonomicPRMNode*>(foundPath[lowIndex]);
+          endP = static_cast<HolonomicPRMNode*>(foundPath[highIndex]);
         }
       } else {
         // We randomly chose lowIndex and highIndex!
@@ -1014,8 +1014,8 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
           if ( (ra != rb) && (abs(ra - rb) > 1) && (foundPathSameStraightLineID_forSteppedSmoothing[ra] != foundPathSameStraightLineID_forSteppedSmoothing[rb]) ) {
             lowIndex = SIM_MIN(ra, rb);
             highIndex = SIM_MAX(ra, rb);
-            startP = static_cast<HolonomicRRTNode*>(foundPath[lowIndex]);
-            endP = static_cast<HolonomicRRTNode*>(foundPath[highIndex]);
+            startP = static_cast<HolonomicPRMNode*>(foundPath[lowIndex]);
+            endP = static_cast<HolonomicPRMNode*>(foundPath[highIndex]);
             break;
           }
         }
@@ -1064,7 +1064,7 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
 
             for (int currentPass = 0; currentPass < passes - 1; currentPass++) {
               addVector(pos, orient, vect);
-              HolonomicRRTNode* it = endP->copyYourself(); // just to have the right size!
+              HolonomicPRMNode* it = endP->copyYourself(); // just to have the right size!
               it->setAllValues(pos, orient);
               foundPath[lowIndex + 1 + currentPass] = it;
               foundPathSameStraightLineID_forSteppedSmoothing[lowIndex + 1 + currentPass] = sameStraightLineNextID_forSteppedSmoothing;
@@ -1078,12 +1078,12 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
   return(0); // will never pass here!
 }
 
-void HolonomicRRT::getPathData(std::vector<float>& data) {
+void HolonomicPRM::getPathData(std::vector<float>& data) {
   data.clear();
   if (invalidData)
     return;
   for (int i = 0; i < int(foundPath.size()); i++) {
-    HolonomicRRTNode* theNode = static_cast<HolonomicRRTNode*>(foundPath[i]);
+    HolonomicPRMNode* theNode = static_cast<HolonomicPRMNode*>(foundPath[i]);
     C3Vector p;
     C4Vector o;
     theNode->getAllValues(p, o);
@@ -1100,7 +1100,7 @@ void HolonomicRRT::getPathData(std::vector<float>& data) {
   }
 }
 
-bool HolonomicRRT::areDirectionConstraintsRespected(float vect[7]) {
+bool HolonomicPRM::areDirectionConstraintsRespected(float vect[7]) {
 	if (planningType == sim_holonomicpathplanning_xy) {
 		if (!_directionConstraintsOn)
 			return(true);
@@ -1210,13 +1210,13 @@ bool HolonomicRRT::areDirectionConstraintsRespected(float vect[7]) {
 	return(true);
 }
 
-bool HolonomicRRT::areSomeValuesForbidden(C7Vector configuration) {
+bool HolonomicPRM::areSomeValuesForbidden(C7Vector configuration) {
   float values[7];
   configuration.getInternalData(values);
   return areSomeValuesForbidden(values);
 }
 
-bool HolonomicRRT::areSomeValuesForbidden(float values[7]) {
+bool HolonomicPRM::areSomeValuesForbidden(float values[7]) {
 	float gamma = 0.0f;
   if (planningType == sim_holonomicpathplanning_xy) {
     if ((values[0] < _searchMinVal[0]) || (values[0] > _searchMinVal[0] + _searchRange[0]))
@@ -1290,7 +1290,7 @@ bool HolonomicRRT::areSomeValuesForbidden(float values[7]) {
   return(gamma > (_searchMinVal[3] + _searchRange[3]));
 }
 
-bool HolonomicRRT::doCollide(float* dist) {
+bool HolonomicPRM::doCollide(float* dist) {
   // dist can be NULL. Dist returns the actual distance only when return value is true!! otherwise it is SIM_MAX_FLOAT!!
   if (dist != NULL)
     dist[0] = SIM_MAX_FLOAT;

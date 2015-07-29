@@ -15,7 +15,7 @@ CXX           = /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefau
 DEFINES       = -DMAC_VREP -DCOMPILING_EXTERNAL_PATHPLANNING_DLL -DQT_GUI_LIB -DQT_CORE_LIB
 CFLAGS        = -pipe -g -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk -mmacosx-version-min=10.6 -Wall -W -fPIC $(DEFINES)
 CXXFLAGS      = -pipe -g -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk -mmacosx-version-min=10.6 -Wall -W -fPIC $(DEFINES)
-INCPATH       = -I/opt/local/share/qt5/mkspecs/macx-clang -I. -IsourceCode -IsourceCode/pathPlanning -IsourceCode/motionPlanning -I../v_rep/sourceCode/interfaces -I../programming/v_repMath -I../programming/include -I../programming/common -isystem /opt/local/include -I../../PB-RRT/ompl-1.0.0-Source/src -I/opt/local/Library/Frameworks/QtGui.framework/Versions/5/Headers -I/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers -I. -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/System/Library/Frameworks/OpenGL.framework/Versions/A/Headers -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/System/Library/Frameworks/AGL.framework/Headers -F/opt/local/Library/Frameworks
+INCPATH       = -I/opt/local/share/qt5/mkspecs/macx-clang -I. -IsourceCode -IsourceCode/pathPlanning -IsourceCode/motionPlanning -IsourceCode/stateSpace -I../v_rep/sourceCode/interfaces -I../programming/v_repMath -I../programming/include -I../programming/common -isystem /opt/local/include -I../../PB-RRT/ompl-1.0.0-Source/src -I/opt/local/Library/Frameworks/QtGui.framework/Versions/5/Headers -I/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers -I. -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/System/Library/Frameworks/OpenGL.framework/Versions/A/Headers -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/System/Library/Frameworks/AGL.framework/Headers -F/opt/local/Library/Frameworks
 LINK          = /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
 LFLAGS        = -headerpad_max_install_names -Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk -mmacosx-version-min=10.6 -single_module -dynamiclib -compatibility_version	1.0 -current_version	1.0.0 -install_name	libv_repExtPathPlanning.1.dylib
 LIBS          = $(SUBLIBS) -F/opt/local/Library/Frameworks -framework QtGui -framework QtCore -framework OpenGL -framework AGL 
@@ -53,6 +53,13 @@ SOURCES       = ../v_rep/sourceCode/interfaces/pathPlanningInterface.cpp \
 		../programming/v_repMath/3X3Matrix.cpp \
 		../programming/v_repMath/4X4Matrix.cpp \
 		../programming/v_repMath/MyMath.cpp \
+		sourceCode/stateSpace/Real2DStateSpace.cpp \
+		sourceCode/stateSpace/Real3DStateSpace.cpp \
+		sourceCode/stateSpace/SE2StateSpace.cpp \
+		sourceCode/stateSpace/SE3StateSpace.cpp \
+		sourceCode/stateSpace/stateSpace.cpp \
+		sourceCode/pathPlanning/RRGstar.cpp \
+		sourceCode/pathPlanning/RRGstarNode.cpp \
 		sourceCode/pathPlanning/HolonomicPathNode.cpp \
 		sourceCode/pathPlanning/HolonomicPathPlanning.cpp \
 		sourceCode/pathPlanning/NonHolonomicPathNode.cpp \
@@ -76,6 +83,13 @@ OBJECTS       = pathPlanningInterface.o \
 		3X3Matrix.o \
 		4X4Matrix.o \
 		MyMath.o \
+		Real2DStateSpace.o \
+		Real3DStateSpace.o \
+		SE2StateSpace.o \
+		SE3StateSpace.o \
+		stateSpace.o \
+		RRGstar.o \
+		RRGstarNode.o \
 		HolonomicPathNode.o \
 		HolonomicPathPlanning.o \
 		NonHolonomicPathNode.o \
@@ -214,6 +228,13 @@ DIST          = /opt/local/share/qt5/mkspecs/features/spec_pre.prf \
 		../programming/v_repMath/3X3Matrix.cpp \
 		../programming/v_repMath/4X4Matrix.cpp \
 		../programming/v_repMath/MyMath.cpp \
+		sourceCode/stateSpace/Real2DStateSpace.cpp \
+		sourceCode/stateSpace/Real3DStateSpace.cpp \
+		sourceCode/stateSpace/SE2StateSpace.cpp \
+		sourceCode/stateSpace/SE3StateSpace.cpp \
+		sourceCode/stateSpace/stateSpace.cpp \
+		sourceCode/pathPlanning/RRGstar.cpp \
+		sourceCode/pathPlanning/RRGstarNode.cpp \
 		sourceCode/pathPlanning/HolonomicPathNode.cpp \
 		sourceCode/pathPlanning/HolonomicPathPlanning.cpp \
 		sourceCode/pathPlanning/NonHolonomicPathNode.cpp \
@@ -533,7 +554,7 @@ qmake_all: FORCE
 
 dist: 
 	@test -d .tmp/v_repExtPathPlanning1.0.0 || mkdir -p .tmp/v_repExtPathPlanning1.0.0
-	$(COPY_FILE) --parents $(DIST) .tmp/v_repExtPathPlanning1.0.0/ && $(COPY_FILE) --parents ../v_rep/sourceCode/interfaces/pathPlanningInterface.h ../v_rep/sourceCode/interfaces/dummyClasses.h ../programming/include/v_repLib.h ../programming/v_repMath/3Vector.h ../programming/v_repMath/4Vector.h ../programming/v_repMath/7Vector.h ../programming/v_repMath/3X3Matrix.h ../programming/v_repMath/4X4Matrix.h ../programming/v_repMath/MyMath.h ../ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighborsGNAT.h sourceCode/pathPlanning/HolonomicPathNode.h sourceCode/pathPlanning/HolonomicPathPlanning.h sourceCode/pathPlanning/NonHolonomicPathNode.h sourceCode/pathPlanning/NonHolonomicPathPlanning.h sourceCode/pathPlanning/HolonomicRRT.h sourceCode/pathPlanning/HolonomicRRTNode.h sourceCode/pathPlanning/HolonomicBiRRT.h sourceCode/pathPlanning/HolonomicBiRRTNode.h sourceCode/pathPlanning/HolonomicRRTstar.h sourceCode/pathPlanning/HolonomicRRTstarNode.h sourceCode/pathPlanning/PathPlanning.h sourceCode/motionPlanning/mpObject.h sourceCode/motionPlanning/mpPhase1Node.h sourceCode/motionPlanning/mpPhase2Node.h sourceCode/v_repExtPathPlanning.h .tmp/v_repExtPathPlanning1.0.0/ && $(COPY_FILE) --parents ../v_rep/sourceCode/interfaces/pathPlanningInterface.cpp ../programming/common/v_repLib.cpp ../programming/v_repMath/3Vector.cpp ../programming/v_repMath/4Vector.cpp ../programming/v_repMath/7Vector.cpp ../programming/v_repMath/3X3Matrix.cpp ../programming/v_repMath/4X4Matrix.cpp ../programming/v_repMath/MyMath.cpp sourceCode/pathPlanning/HolonomicPathNode.cpp sourceCode/pathPlanning/HolonomicPathPlanning.cpp sourceCode/pathPlanning/NonHolonomicPathNode.cpp sourceCode/pathPlanning/NonHolonomicPathPlanning.cpp sourceCode/pathPlanning/HolonomicRRT.cpp sourceCode/pathPlanning/HolonomicRRTNode.cpp sourceCode/pathPlanning/HolonomicBiRRT.cpp sourceCode/pathPlanning/HolonomicBiRRTNode.cpp sourceCode/pathPlanning/HolonomicRRTstar.cpp sourceCode/pathPlanning/HolonomicRRTstarNode.cpp sourceCode/pathPlanning/PathPlanning.cpp sourceCode/motionPlanning/mpObject.cpp sourceCode/motionPlanning/mpPhase1Node.cpp sourceCode/motionPlanning/mpPhase2Node.cpp sourceCode/v_repExtPathPlanning.cpp .tmp/v_repExtPathPlanning1.0.0/ && (cd `dirname .tmp/v_repExtPathPlanning1.0.0` && $(TAR) v_repExtPathPlanning1.0.0.tar v_repExtPathPlanning1.0.0 && $(COMPRESS) v_repExtPathPlanning1.0.0.tar) && $(MOVE) `dirname .tmp/v_repExtPathPlanning1.0.0`/v_repExtPathPlanning1.0.0.tar.gz . && $(DEL_FILE) -r .tmp/v_repExtPathPlanning1.0.0
+	$(COPY_FILE) --parents $(DIST) .tmp/v_repExtPathPlanning1.0.0/ && $(COPY_FILE) --parents ../v_rep/sourceCode/interfaces/pathPlanningInterface.h ../v_rep/sourceCode/interfaces/dummyClasses.h ../programming/include/v_repLib.h ../programming/v_repMath/3Vector.h ../programming/v_repMath/4Vector.h ../programming/v_repMath/7Vector.h ../programming/v_repMath/3X3Matrix.h ../programming/v_repMath/4X4Matrix.h ../programming/v_repMath/MyMath.h ../ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighborsGNAT.h sourceCode/stateSpace/Real2DStateSpace.h sourceCode/stateSpace/Real3DStateSpace.h sourceCode/stateSpace/SE2StateSpace.h sourceCode/stateSpace/SE3StateSpace.h sourceCode/stateSpace/stateSpace.h sourceCode/pathPlanning/RRGstar.h sourceCode/pathPlanning/RRGstarNode.h sourceCode/pathPlanning/HolonomicPathNode.h sourceCode/pathPlanning/HolonomicPathPlanning.h sourceCode/pathPlanning/NonHolonomicPathNode.h sourceCode/pathPlanning/NonHolonomicPathPlanning.h sourceCode/pathPlanning/HolonomicRRT.h sourceCode/pathPlanning/HolonomicRRTNode.h sourceCode/pathPlanning/HolonomicBiRRT.h sourceCode/pathPlanning/HolonomicBiRRTNode.h sourceCode/pathPlanning/HolonomicRRTstar.h sourceCode/pathPlanning/HolonomicRRTstarNode.h sourceCode/pathPlanning/PathPlanning.h sourceCode/motionPlanning/mpObject.h sourceCode/motionPlanning/mpPhase1Node.h sourceCode/motionPlanning/mpPhase2Node.h sourceCode/v_repExtPathPlanning.h .tmp/v_repExtPathPlanning1.0.0/ && $(COPY_FILE) --parents ../v_rep/sourceCode/interfaces/pathPlanningInterface.cpp ../programming/common/v_repLib.cpp ../programming/v_repMath/3Vector.cpp ../programming/v_repMath/4Vector.cpp ../programming/v_repMath/7Vector.cpp ../programming/v_repMath/3X3Matrix.cpp ../programming/v_repMath/4X4Matrix.cpp ../programming/v_repMath/MyMath.cpp sourceCode/stateSpace/Real2DStateSpace.cpp sourceCode/stateSpace/Real3DStateSpace.cpp sourceCode/stateSpace/SE2StateSpace.cpp sourceCode/stateSpace/SE3StateSpace.cpp sourceCode/stateSpace/stateSpace.cpp sourceCode/pathPlanning/RRGstar.cpp sourceCode/pathPlanning/RRGstarNode.cpp sourceCode/pathPlanning/HolonomicPathNode.cpp sourceCode/pathPlanning/HolonomicPathPlanning.cpp sourceCode/pathPlanning/NonHolonomicPathNode.cpp sourceCode/pathPlanning/NonHolonomicPathPlanning.cpp sourceCode/pathPlanning/HolonomicRRT.cpp sourceCode/pathPlanning/HolonomicRRTNode.cpp sourceCode/pathPlanning/HolonomicBiRRT.cpp sourceCode/pathPlanning/HolonomicBiRRTNode.cpp sourceCode/pathPlanning/HolonomicRRTstar.cpp sourceCode/pathPlanning/HolonomicRRTstarNode.cpp sourceCode/pathPlanning/PathPlanning.cpp sourceCode/motionPlanning/mpObject.cpp sourceCode/motionPlanning/mpPhase1Node.cpp sourceCode/motionPlanning/mpPhase2Node.cpp sourceCode/v_repExtPathPlanning.cpp .tmp/v_repExtPathPlanning1.0.0/ && (cd `dirname .tmp/v_repExtPathPlanning1.0.0` && $(TAR) v_repExtPathPlanning1.0.0.tar v_repExtPathPlanning1.0.0 && $(COMPRESS) v_repExtPathPlanning1.0.0.tar) && $(MOVE) `dirname .tmp/v_repExtPathPlanning1.0.0`/v_repExtPathPlanning1.0.0.tar.gz . && $(DEL_FILE) -r .tmp/v_repExtPathPlanning1.0.0
 
 
 clean:compiler_clean 
@@ -677,6 +698,117 @@ MyMath.o: ../programming/v_repMath/MyMath.cpp ../programming/v_repMath/MyMath.h 
 		../programming/v_repMath/4X4FullMatrix.h \
 		../programming/v_repMath/MMatrix.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o MyMath.o ../programming/v_repMath/MyMath.cpp
+
+Real2DStateSpace.o: sourceCode/stateSpace/Real2DStateSpace.cpp sourceCode/stateSpace/Real2DStateSpace.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h \
+		../programming/include/v_repLib.h \
+		../programming/include/v_repConst.h \
+		../programming/include/v_repTypes.h \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/QLibrary \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/qlibrary.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o Real2DStateSpace.o sourceCode/stateSpace/Real2DStateSpace.cpp
+
+Real3DStateSpace.o: sourceCode/stateSpace/Real3DStateSpace.cpp sourceCode/stateSpace/Real3DStateSpace.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h \
+		../programming/include/v_repLib.h \
+		../programming/include/v_repConst.h \
+		../programming/include/v_repTypes.h \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/QLibrary \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/qlibrary.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o Real3DStateSpace.o sourceCode/stateSpace/Real3DStateSpace.cpp
+
+SE2StateSpace.o: sourceCode/stateSpace/SE2StateSpace.cpp sourceCode/stateSpace/SE2StateSpace.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h \
+		../programming/include/v_repLib.h \
+		../programming/include/v_repConst.h \
+		../programming/include/v_repTypes.h \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/QLibrary \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/qlibrary.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o SE2StateSpace.o sourceCode/stateSpace/SE2StateSpace.cpp
+
+SE3StateSpace.o: sourceCode/stateSpace/SE3StateSpace.cpp sourceCode/stateSpace/SE3StateSpace.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h \
+		../programming/include/v_repLib.h \
+		../programming/include/v_repConst.h \
+		../programming/include/v_repTypes.h \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/QLibrary \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/qlibrary.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o SE3StateSpace.o sourceCode/stateSpace/SE3StateSpace.cpp
+
+stateSpace.o: sourceCode/stateSpace/stateSpace.cpp sourceCode/stateSpace/stateSpace.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o stateSpace.o sourceCode/stateSpace/stateSpace.cpp
+
+RRGstar.o: sourceCode/pathPlanning/RRGstar.cpp sourceCode/pathPlanning/RRGstar.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighborsGNAT.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighbors.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/StateSpace.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/State.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/StateSpaceTypes.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/StateSampler.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/util/RandomNumbers.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/util/ClassForward.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/ProjectionEvaluator.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/util/Console.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/GenericParam.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/base/spaces/RealVectorBounds.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/datastructures/GreedyKCenters.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/datastructures/PDF.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/util/Exception.h \
+		../../PB-RRT/ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighborsLinear.h \
+		sourceCode/pathPlanning/HolonomicPathPlanning.h \
+		sourceCode/pathPlanning/PathPlanning.h \
+		sourceCode/pathPlanning/HolonomicPathNode.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h \
+		../v_rep/sourceCode/interfaces/dummyClasses.h \
+		sourceCode/pathPlanning/RRGstarNode.h \
+		../v_rep/sourceCode/interfaces/pathPlanningInterface.h \
+		../programming/include/v_repLib.h \
+		../programming/include/v_repConst.h \
+		../programming/include/v_repTypes.h \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/QLibrary \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/qlibrary.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o RRGstar.o sourceCode/pathPlanning/RRGstar.cpp
+
+RRGstarNode.o: sourceCode/pathPlanning/RRGstarNode.cpp sourceCode/pathPlanning/RRGstarNode.h \
+		sourceCode/pathPlanning/HolonomicPathNode.h \
+		../programming/v_repMath/3Vector.h \
+		../programming/v_repMath/mathDefines.h \
+		../programming/v_repMath/4Vector.h \
+		../programming/v_repMath/3X3Matrix.h \
+		../programming/v_repMath/7Vector.h \
+		../v_rep/sourceCode/interfaces/pathPlanningInterface.h \
+		../v_rep/sourceCode/interfaces/dummyClasses.h \
+		../programming/include/v_repLib.h \
+		../programming/include/v_repConst.h \
+		../programming/include/v_repTypes.h \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/QLibrary \
+		/opt/local/Library/Frameworks/QtCore.framework/Versions/5/Headers/qlibrary.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o RRGstarNode.o sourceCode/pathPlanning/RRGstarNode.cpp
 
 HolonomicPathNode.o: sourceCode/pathPlanning/HolonomicPathNode.cpp sourceCode/pathPlanning/HolonomicPathNode.h \
 		../programming/v_repMath/3Vector.h \

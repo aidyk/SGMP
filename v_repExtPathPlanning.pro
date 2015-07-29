@@ -92,6 +92,7 @@ DEFINES += COMPILING_EXTERNAL_PATHPLANNING_DLL
 INCLUDEPATH += "sourceCode"
 INCLUDEPATH += "sourceCode/pathPlanning"
 INCLUDEPATH += "sourceCode/motionPlanning"
+INCLUDEPATH += "sourceCode/stateSpace"
 INCLUDEPATH += "../v_rep/sourceCode/interfaces"
 INCLUDEPATH += "../programming/v_repMath"
 INCLUDEPATH += "../programming/include"
@@ -109,6 +110,13 @@ HEADERS += ../v_rep/sourceCode/interfaces/pathPlanningInterface.h \
 	../programming/v_repMath/4X4Matrix.h \
 	../programming/v_repMath/MyMath.h \
 	../ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighborsGNAT.h \
+    sourceCode/stateSpace/Real2DStateSpace.h \
+    sourceCode/stateSpace/Real3DStateSpace.h \
+    sourceCode/stateSpace/SE2StateSpace.h \
+    sourceCode/stateSpace/SE3StateSpace.h \
+    sourceCode/stateSpace/stateSpace.h \
+    sourceCode/pathPlanning/RRGstar.h \
+    sourceCode/pathPlanning/RRGstarNode.h
 	
 HEADERS += sourceCode/pathPlanning/HolonomicPathNode.h \
 	sourceCode/pathPlanning/HolonomicPathPlanning.h \
@@ -134,6 +142,13 @@ SOURCES += ../v_rep/sourceCode/interfaces/pathPlanningInterface.cpp \
 	../programming/v_repMath/3X3Matrix.cpp \
 	../programming/v_repMath/4X4Matrix.cpp \
 	../programming/v_repMath/MyMath.cpp \
+    sourceCode/stateSpace/Real2DStateSpace.cpp \
+    sourceCode/stateSpace/Real3DStateSpace.cpp \
+    sourceCode/stateSpace/SE2StateSpace.cpp \
+    sourceCode/stateSpace/SE3StateSpace.cpp \
+    sourceCode/stateSpace/stateSpace.cpp \
+    sourceCode/pathPlanning/RRGstar.cpp \
+    sourceCode/pathPlanning/RRGstarNode.cpp
 
 SOURCES += sourceCode/pathPlanning/HolonomicPathNode.cpp \
 	sourceCode/pathPlanning/HolonomicPathPlanning.cpp \
