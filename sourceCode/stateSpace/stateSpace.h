@@ -11,15 +11,20 @@ class StateSpace {
 		virtual ~StateSpace();
 	
 		virtual StateSpace* copyMyself() = 0;
+		virtual void reSample(int theType, float searchMin[4], float searchRange[4]) = 0;
+		virtual int getVector(StateSpace* from, StateSpace* to, float vect[7], float e, float& artificialLength) = 0;
 		virtual int getSize() = 0;
 
 		virtual void getAllValues(float* v);
 		virtual void setAllValues(float* v);
-		virtual void reSample(int theType, float searchMin[4], float searchRange[4]) = 0;
+
+        virtual void getOrientation(C4Vector& q); // Quaternion
+        virtual void setOrientation(C4Vector* q);
 
 	protected:  
 		C4Vector _rotAxisRot; 
 		C4Vector _rotAxisRotInv;
+        float _angularCoeff;
 
 		int _nodeType;
 		int _dimension;

@@ -117,6 +117,9 @@ RRGstar::RRGstar(int theStartDummyID, int theGoalDummyID,
   _nn->add(_start_node);
   _nn->add(_goal_node);
 
+  // Set ballRadiusMax and ballRadiusConst to maximum extent
+  _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
+
   buffer[0] = -1; // What the hell is this?
   invalidData = false;
 }
@@ -179,194 +182,79 @@ float RRGstar::distance(RRGstarNode* a, RRGstarNode* b) {
   return sqrt(dist);
 }
 
-std::vector<RRGstarNode*> RRGstar::getNearNeighborNodes(std::vector<RRGstarNode*>& nodes,
-		RRGstarNode* query, float radius) {
-  std::vector<RRGstarNode*> neighbors;
-  nodes.push_back(static_cast<RRGstarNode*>(fromGoal[0]));
-
-  if (planningType == sim_holonomicpathplanning_xy) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[2];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-
-      float d = vect[0] * vect[0] + vect[1] * vect[1];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[2];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = CPathPlanningInterface::getNormalizedAngle(query->values[1] - nodes[i]->values[1]);
-      vect[1] *= angularCoeff;
-
-      float d = vect[0] * vect[0] + vect[1] * vect[1];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyz) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = query->values[2] - nodes[i]->values[2];
-
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = CPathPlanningInterface::getNormalizedAngle(query->values[2] - nodes[i]->values[2]);
-      vect[2] *= angularCoeff;
-
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_abg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[0] = diff(0);
-      vect[1] = diff(1);
-      vect[2] = diff(2);
-      vect[3] = diff(3);
-
-      float d = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      d *= d;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyzg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = query->values[2] - nodes[i]->values[2];
-      vect[3] = CPathPlanningInterface::getNormalizedAngle(query->values[3] - nodes[i]->values[3]);
-
-      vect[3] *= angularCoeff;
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + vect[3] * vect[3];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[5];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[1] = diff(0);
-      vect[2] = diff(1);
-      vect[3] = diff(2);
-      vect[4] = diff(3);
-
-      float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      float d = vect[0] * vect[0] + ad * ad;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[6];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[2] = diff(0);
-      vect[3] = diff(1);
-      vect[4] = diff(2);
-      vect[5] = diff(3);
-
-      float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + ad * ad;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else { // (planningType==sim_holonomicpathplanning_xyzabg)
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[7];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = query->values[2] - nodes[i]->values[2];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[3] = diff(0);
-      vect[4] = diff(1);
-      vect[5] = diff(2);
-      vect[6] = diff(3);
-
-      float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + ad * ad;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  }
-  nodes.pop_back();
-
-  return neighbors;
-}
-
 void RRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
   std::vector<RRGstarNode*> cont;
-  if (fromTheStart)
-    _nn->list(cont);
-  else
-    return;
+  _nn->list(cont);
 
-  if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
-    for (int i = 1; i < int(cont.size()); i++) {
-      C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
-      C3Vector goal(cont[i]->parent->values[0], cont[i]->parent->values[1], 0.0f);
-      start = _startDummyCTM * start;
-      goal = _startDummyCTM * goal;
-      float d[6];
-      start.copyTo(d);
-      goal.copyTo(d + 3);
-      for (int j = 0; j < 6; j++)
-        data.push_back(d[j]);
+  if (fromTheStart) {
+    if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
+      for (int i = 1; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
+        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+      }
+
+    } else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
+      for (int i = 1; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
+        C3Vector goal(cont[i]->pred->values[0], 0.0f, 0.0f);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+      }
+
+    } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
+      for (int i = 0; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+      }
     }
-  } else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
-    for (int i = 1; i < int(cont.size()); i++) {
-      C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
-      C3Vector goal(cont[i]->parent->values[0], 0.0f, 0.0f);
-      start = _startDummyCTM * start;
-      goal = _startDummyCTM * goal;
-      float d[6];
-      start.copyTo(d);
-      goal.copyTo(d + 3);
-      for (int j = 0; j < 6; j++)
-        data.push_back(d[j]);
-    }
-  } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
-    for (int i = 1; i < int(cont.size()); i++) {
-      C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
-      C3Vector goal(cont[i]->parent->values[0], cont[i]->parent->values[1], cont[i]->parent->values[2]);
-      start = _startDummyCTM * start;
-      goal = _startDummyCTM * goal;
-      float d[6];
-      start.copyTo(d);
-      goal.copyTo(d + 3);
-      for (int j = 0; j < 6; j++)
-        data.push_back(d[j]);
+  } else { // !fromTheStart
+    if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
+      for (int i = 0; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+        /*
+        for (int j = 0; j < it->_nodes.size(); j++) {
+          RRGstarNode* jt = it->_nodes[j].node();
+          if (jt == it->pred) continue;
+
+          C3Vector start(it->values[0], it->values[1], it->values[2]);
+          C3Vector goal(jt->values[0], jt->values[1], jt->values[2]);
+          start = _startDummyCTM * start;
+          goal = _startDummyCTM * goal;
+          float d[6];
+          start.copyTo(d);
+          goal.copyTo(d + 3);
+          for (int k = 0; k < 6; k++)
+            data.push_back(d[k]);
+        }
+        */
+      }
     }
   }
 }
@@ -403,12 +291,18 @@ int RRGstar::searchPath(int maxTimePerPass) {
     float artificialCost, cArtificialCost;
     if (closest == NULL) continue;
 
+    if (distance(randNode, closest) > _ballRadiusConst * _maxDistance) {
+      randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
+    }
+
     RRGstarNode* extended = extend(closest, randNode, true, startDummy, cArtificialCost);
     if (extended == NULL) continue;
 
     std::vector<RRGstarNode*> neighbors;
     _nn->nearestR(extended, getNearNeighborRadius(), neighbors);
     _nn->add(extended);
+    extended->addNode(closest, cArtificialCost);
+    closest->addNode(extended, cArtificialCost);
 
     RRGstarNode* dummy;
     for (int i = 0; i < neighbors.size(); i++) if (neighbors[i] != closest) {
@@ -418,7 +312,6 @@ int RRGstar::searchPath(int maxTimePerPass) {
         extended->addNode(neighbors[i], artificialCost);
         neighbors[i]->addNode(extended, artificialCost);
       } else { // collision
-
       }
     }
   }
@@ -433,7 +326,7 @@ int RRGstar::searchPath(int maxTimePerPass) {
 }
 
 // Return best solution path in the current roadmap using traditional A* algorithm.
-float RRGstar::getBestSolutionPath(vector<RRGstarNode*> &path) {
+float RRGstar::getBestSolutionPath(vector<RRGstarNode*> &path, RRGstarNode* goal_node) {
   priority_queue<RRGstarNode*> pq;
 
   // initialization already done in constructor
@@ -441,11 +334,12 @@ float RRGstar::getBestSolutionPath(vector<RRGstarNode*> &path) {
 
   s->color = 1; // Gray.
   s->d = 0;
-  s->f = distance(s, _goal_node);
+  s->f = distance(s, goal_node);
   pq.push(s);
 
   while (!pq.empty()) {
     RRGstarNode* top = pq.top();
+    pq.pop();
 
     for (int i = 0; i < top->_nodes.size(); i++) {
       RRGstarNode::Edge &edge = top->_nodes[i];
@@ -453,7 +347,7 @@ float RRGstar::getBestSolutionPath(vector<RRGstarNode*> &path) {
       float dist = edge.cost();
       if (dist + top->d < edge.node()->d) {
         edge.node()->d = dist + top->d;
-        edge.node()->f = edge.node()->d + distance(edge.node(), _goal_node);
+        edge.node()->f = edge.node()->d + distance(edge.node(), goal_node);
         edge.node()->pred = top;
 
         if (edge.node()->color == 0) { // White.
@@ -468,17 +362,17 @@ float RRGstar::getBestSolutionPath(vector<RRGstarNode*> &path) {
     top->color = 2;
   }
 
-  if (_goal_node->color != 2) { // Failed to find a solution path
+  if (goal_node->color != 2) { // Failed to find a solution path
     return 0.0;
   } else { // It must be black!
-    RRGstarNode* back_track = _goal_node;
+    RRGstarNode* back_track = goal_node;
     while (back_track->pred != back_track) {
       foundPath.push_back(back_track);
       back_track = back_track->pred;
     }
-    reverse(foundPath.begin(), foundPath.end());
+    foundPath.push_back(back_track);
   }
-
+  reverse(foundPath.begin(), foundPath.end());
   return 1.0;
 }
 
@@ -492,7 +386,6 @@ bool RRGstar::gotPotential(RRGstarNode* it) {
 }
 
 bool RRGstar::setPartialPath() {
-  RRGstarNode* it = _nn->nearest(_goal_node);
   vector<RRGstarNode*> path;
 
   printf("%d\n", _nn->size());
@@ -507,158 +400,9 @@ bool RRGstar::setPartialPath() {
 
   printf("Avg. Degree : %f\n", sum_degree / (double)nodes.size());
 
-  if (it->color == 2) { // Black, Closed.
-    getBestSolutionPath(path);
-  } else {
+  if (getBestSolutionPath(path, _goal_node) == 0.0)
     return false;
-  }
-
-  return(true);
-}
-
-RRGstarNode* RRGstar::getClosestNode(std::vector<RRGstarNode*>& nodes, RRGstarNode* sample) {
-  float minD = SIM_MAX_FLOAT;
-  int index = -1;
-
-  if (planningType == sim_holonomicpathplanning_xyz) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      if (areDirectionConstraintsRespected(vect)) {
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = CPathPlanningInterface::getNormalizedAngle(sample->values[2] - nodes[i]->values[2]);
-      if (areDirectionConstraintsRespected(vect)) {
-        vect[2] *= angularCoeff;
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_abg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[0] = diff(0);
-      vect[1] = diff(1);
-      vect[2] = diff(2);
-      vect[3] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float d = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        d *= d;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyzg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      vect[3] = CPathPlanningInterface::getNormalizedAngle(sample->values[3] - nodes[i]->values[3]);
-      if (areDirectionConstraintsRespected(vect)) {
-        vect[3] *= angularCoeff;
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + vect[3] * vect[3];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[5];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[1] = diff(0);
-      vect[2] = diff(1);
-      vect[3] = diff(2);
-      vect[4] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[6];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[2] = diff(0);
-      vect[3] = diff(1);
-      vect[4] = diff(2);
-      vect[5] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else { // (planningType==sim_holonomicpathplanning_xyzabg)
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[7];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[3] = diff(0);
-      vect[4] = diff(1);
-      vect[5] = diff(2);
-      vect[6] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  }
-  if (index != -1)
-    return(nodes[index]);
-  return(NULL);
+  return true;
 }
 
 RRGstarNode* RRGstar::slerp(RRGstarNode* from, RRGstarNode* to, float t) {

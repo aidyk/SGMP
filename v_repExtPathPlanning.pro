@@ -59,6 +59,7 @@ CONFIG += shared
 	QMAKE_CXXFLAGS += -Wno-strict-aliasing
 	QMAKE_CXXFLAGS += -Wno-empty-body
 	QMAKE_CXXFLAGS += -Wno-write-strings
+	QMAKE_CXXFLAGS += -std=c++11
 
 	# Best would be to have a switch based on compiler version, but apparently that doesn't exist. So we use the Qt version..
 	greaterThan(QT_MAJOR_VERSION,4): QMAKE_CXXFLAGS += -Wno-unused-but-set-variable
@@ -116,7 +117,9 @@ HEADERS += ../v_rep/sourceCode/interfaces/pathPlanningInterface.h \
     sourceCode/stateSpace/SE3StateSpace.h \
     sourceCode/stateSpace/stateSpace.h \
     sourceCode/pathPlanning/RRGstar.h \
-    sourceCode/pathPlanning/RRGstarNode.h
+    sourceCode/pathPlanning/RRGstarNode.h \
+    sourceCode/pathPlanning/LazyRRGstar.h \
+    sourceCode/pathPlanning/LazyRRGstarNode.h
 	
 HEADERS += sourceCode/pathPlanning/HolonomicPathNode.h \
 	sourceCode/pathPlanning/HolonomicPathPlanning.h \
@@ -148,7 +151,9 @@ SOURCES += ../v_rep/sourceCode/interfaces/pathPlanningInterface.cpp \
     sourceCode/stateSpace/SE3StateSpace.cpp \
     sourceCode/stateSpace/stateSpace.cpp \
     sourceCode/pathPlanning/RRGstar.cpp \
-    sourceCode/pathPlanning/RRGstarNode.cpp
+    sourceCode/pathPlanning/RRGstarNode.cpp \
+    sourceCode/pathPlanning/LazyRRGstar.cpp \
+    sourceCode/pathPlanning/LazyRRGstarNode.cpp
 
 SOURCES += sourceCode/pathPlanning/HolonomicPathNode.cpp \
 	sourceCode/pathPlanning/HolonomicPathPlanning.cpp \

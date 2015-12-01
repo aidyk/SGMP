@@ -49,23 +49,26 @@
 #include <vector>
 
 #include "HolonomicPathPlanning.h"
-#include "RRGstarNode.h"
+#include "LazyRRGstarNode.h"
 #include "dummyClasses.h"
 #include "4Vector.h"
 #include "7Vector.h"
 
+#define PROPOSED
+#define PRESORT
+
 using namespace std;
 
-class RRGstar : public CHolonomicPathPlanning
+class LazyRRGstar : public CHolonomicPathPlanning
 {
 public:
-  RRGstar(int theStartDummyID,int theGoalDummyID,
+  LazyRRGstar(int theStartDummyID,int theGoalDummyID,
                    int theRobotCollectionID,int theObstacleCollectionID,int ikGroupID,
                    int thePlanningType,float theAngularCoeff,
                    float theStepSize,
                    const float theSearchMinVal[4],const float theSearchRange[4],
   const int theDirectionConstraints[4],const float clearanceAndMaxDistance[2],const C3Vector& gammaAxis);
-  virtual ~RRGstar();
+  virtual ~LazyRRGstar();
 
   // Following functions are inherited from CPathPlanning:
   int searchPath(int maxTimePerPass);
@@ -88,7 +91,7 @@ public:
 
   // Return the length of best solution path and its actual sequence of configurations
   // as vector form.
-  float getBestSolutionPath(vector<RRGstarNode*>& path, RRGstarNode* goal_node);
+  float getBestSolutionPath(LazyRRGstarNode* goal_node);
 
 private:
   bool doCollide(float* dist);
@@ -98,13 +101,22 @@ private:
   bool areSomeValuesForbidden(float values[7]);
   bool areSomeValuesForbidden(C7Vector configuration);
 
-  float distance(RRGstarNode* a, RRGstarNode* b);
-  int getVector(RRGstarNode* fromPoint,RRGstarNode* toPoint,float vect[7],float e,float& artificialLength,bool dontDivide);
-  std::vector<RRGstarNode*> getNearNeighborNodes(std::vector<RRGstarNode*>& nodes, RRGstarNode* node, float radius);
-  RRGstarNode* extend(RRGstarNode* from, RRGstarNode* to,
+  float distance(LazyRRGstarNode* a, LazyRRGstarNode* b);
+  int getVector(LazyRRGstarNode* fromPoint,LazyRRGstarNode* toPoint,float vect[7],float e,float& artificialLength,bool dontDivide);
+  std::vector<LazyRRGstarNode*> getNearNeighborNodes(std::vector<LazyRRGstarNode*>& nodes, LazyRRGstarNode* node, float radius);
+  LazyRRGstarNode* extend(LazyRRGstarNode* from, LazyRRGstarNode* to,
                       bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost);
-  RRGstarNode* slerp(RRGstarNode*, RRGstarNode*, float t);
-  bool gotPotential(RRGstarNode* it);
+  LazyRRGstarNode* lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode* to,
+                      bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost);
+  LazyRRGstarNode* slerp(LazyRRGstarNode*, LazyRRGstarNode*, float t);
+  bool isFree(LazyRRGstarNode*, CDummyDummy *dummy);
+
+  void DynamicShortestPathUpdate(CDummyDummy* startDummy);
+  void DynamicDecrease(LazyRRGstarNode *node);
+  void DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to);
+  void DynamicDelete(LazyRRGstarNode *from, LazyRRGstarNode *to);
+
+  bool gotPotential(LazyRRGstarNode* it);
 
   int startDummyID;
   int goalDummyID;
@@ -123,7 +135,7 @@ private:
   C7Vector _startDummyLTM;
 
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
-  boost::shared_ptr<ompl::NearestNeighborsLinear<RRGstarNode*> > _nn;
+  boost::shared_ptr<ompl::NearestNeighborsLinear<LazyRRGstarNode*> > _nn;
 
   // <RRG controllable parameters
   float _ballRadiusConst;
@@ -131,8 +143,9 @@ private:
   float _goalBias;
   float _maxDistance;
   // >
-  RRGstarNode* _start_node;
-  RRGstarNode* _goal_node;
+  LazyRRGstarNode* _start_node;
+  LazyRRGstarNode* _goal_node;
+  float _best_cost;
 
   int numberOfRandomConnectionTries_forSteppedSmoothing;
   int numberOfRandomConnectionTriesLeft_forSteppedSmoothing;

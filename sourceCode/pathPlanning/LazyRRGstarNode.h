@@ -43,30 +43,60 @@
 
 #pragma once
 
+#include "HolonomicPathNode.h"
 #include "3Vector.h"
 #include "4Vector.h"
 #include "7Vector.h"
+#include <vector>
 
-class CHolonomicPathNode  
+class LazyRRGstarNode : public CHolonomicPathNode
 {
 public:
-  CHolonomicPathNode(const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-  CHolonomicPathNode(int theType,const C7Vector& conf,const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-  CHolonomicPathNode(int theType,float searchMin[4],float searchRange[4],const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-  virtual ~CHolonomicPathNode();
+  class Edge {
+  public:
+    Edge(LazyRRGstarNode* n, float c) {
+      _node = n; _cost = c;
+    }
+    LazyRRGstarNode* node() { return _node; }
+    float cost() { return _cost; }
+    void cost(float c) { _cost = c; }
+  private:
+    LazyRRGstarNode* _node;
+    float _cost;
+  };
+public:
+  LazyRRGstarNode(const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
+  LazyRRGstarNode(int theType,const C7Vector& conf,const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
+  LazyRRGstarNode(int theType,float searchMin[4],float searchRange[4],const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
+  virtual ~LazyRRGstarNode();
+  virtual LazyRRGstarNode* copyYourself();
 
-  virtual CHolonomicPathNode* copyYourself();
-  virtual int getSize();
-  virtual void setAllValues(float* v);
-  virtual void setAllValues(const C3Vector& pos,const C4Vector& orient);
-  virtual void getAllValues(C3Vector& pos,C4Vector& orient);
-  virtual void reSample(int theType, float searchMin[4], float serachRange[4]);
-  virtual void interpolate(CHolonomicPathNode* from, float t, float angularCoeff);
+  // <Set/Getters
+  void setCost(float cost) { _cost = cost; }
+  float getCost() { return _cost; }
 
-  CHolonomicPathNode* parent;
-  float* values;
-protected:
-  int _nodeType;
-  C4Vector _rotAxisRot;
-  C4Vector _rotAxisRotInv;
+  void addNode(LazyRRGstarNode* node, float cost) { _edges.push_back(Edge(node, cost)); }
+  void removeNode(LazyRRGstarNode* node);
+  std::vector<Edge>& edges() { return _edges; }
+
+  bool isCollisionFree() { return !collision; }
+  // >
+  // for shortestpath computation
+  LazyRRGstarNode* pred;
+
+  // A*
+  float f;
+  float d;
+  int color;
+
+  bool collision;
+
+  // Increasing order for priority queue
+  bool operator < (const LazyRRGstarNode& node) const {
+    return this->f > node.f;
+  }
+  std::vector<Edge> _edges;
+
+private:
+  float _cost;
 };

@@ -98,9 +98,6 @@ private:
 	int sameStraightLineNextID_forSteppedSmoothing;
 	int nextIteration_forSteppedSmoothing;
 
-
-
-
 	float _startConfInterferenceState;
 
 	int directionConstraints[2]; // WRONG!!! NOT USED NOW!!! 0 is for vehicle direction, 1 is for steering direction

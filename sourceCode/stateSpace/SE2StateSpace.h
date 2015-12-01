@@ -11,6 +11,7 @@ class SE2StateSpace : public StateSpace {
 		SE2StateSpace(const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv, int dimension);
 		virtual SE2StateSpace* copyMyself();
 		virtual int getSize();
+		virtual int getVector(StateSpace* from, StateSpace* to, float vect[7], float e, float& artificialLength);
 
 		virtual void reSample(int theType, float searchMin[4], float searchRange[4]);
 };

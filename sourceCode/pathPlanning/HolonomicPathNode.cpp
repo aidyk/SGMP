@@ -130,6 +130,78 @@ void CHolonomicPathNode::reSample(int theType, float searchMin[4], float searchR
   }
 }
 
+void CHolonomicPathNode::interpolate(CHolonomicPathNode* from, float t, float angularCoeff) {
+  float vect[7];
+
+  if (_nodeType == sim_holonomicpathplanning_xy) {
+    vect[0] = values[0] - from->values[0];
+    vect[1] = values[1] - from->values[1];
+
+    float l = sqrtf(vect[0] * vect[0] + vect[1] * vect[1]);
+    float bound = t / l;
+
+    values[0] = vect[0] * bound + from->values[0];
+    values[1] = vect[1] * bound + from->values[1];
+  } else if (_nodeType == sim_holonomicpathplanning_xyz) {
+    vect[0] = values[0] - from->values[0];
+    vect[1] = values[1] - from->values[1];
+    vect[2] = values[2] - from->values[2];
+
+    float l = sqrtf(vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2]);
+    float bound = t / l;
+/*
+    values[0] = vect[0] * bound + from->values[0];
+    values[1] = vect[1] * bound + from->values[1];
+    values[2] = vect[2] * bound + from->values[2];
+    */
+    for (int i = 0; i < 3; i++) {
+      values[i] = from->values[i] * (1.0 - bound) + values[i] * bound;
+    }
+  } else if (_nodeType == sim_holonomicpathplanning_xyg) {
+    vect[0] = values[0] - from->values[0];
+    vect[1] = values[1] - from->values[1];
+    vect[2] = CPathPlanningInterface::getNormalizedAngle(values[2] - from->values[2]);
+
+    float l = vect[0] * vect[0] + vect[1] * vect[1];
+    l = sqrtf(l + vect[2] * angularCoeff * vect[2] * angularCoeff);
+    float bound = t / l;
+
+    values[0] = vect[0] * bound + from->values[0];
+    values[1] = vect[1] * bound + from->values[1];
+    values[2] = CPathPlanningInterface::getNormalizedAngle(
+          vect[2] * bound + from->values[2]);
+  } else if (_nodeType == sim_holonomicpathplanning_xyzabg) {
+    vect[0] = values[0] - from->values[0];
+    vect[1] = values[1] - from->values[1];
+    vect[2] = values[2] - from->values[2];
+    C4Vector toP, fromP;
+    C3Vector dum;
+    getAllValues(dum, toP);
+    from->getAllValues(dum, fromP);
+    C4Vector diff(fromP.getInverse()*toP);
+    vect[3] = diff(0);
+    vect[4] = diff(1);
+    vect[5] = diff(2);
+    vect[6] = diff(3);
+
+    float ap = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
+    float l = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
+    l = sqrtf(l + ap * ap);
+    float bound = t / l;
+
+    values[0] = vect[0] * bound + from->values[0];
+    values[1] = vect[1] * bound + from->values[1];
+    values[2] = vect[2] * bound + from->values[2];
+    C4Vector q;
+    q.setIdentity();
+    fromP.buildInterpolation(q, diff, bound);
+    values[3] = fromP(0);
+    values[4] = fromP(1);
+    values[5] = fromP(2);
+    values[6] = fromP(3);
+  }
+}
+
 void CHolonomicPathNode::setAllValues(const C3Vector& pos, const C4Vector& orient) {
   if (_nodeType == sim_holonomicpathplanning_xy) {
     values[0] = pos(0);

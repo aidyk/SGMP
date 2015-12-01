@@ -64,10 +64,14 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
   if (aux_fp == NULL) {
     fprintf(stderr, "Failed to load a configuration file, check the 'setting.cfg' file and its location.");
     return;
+  } else {
+    fprintf(stderr, "setting.cfg successfully loaded.");
   }
 
   char planner_type[16], option_type[32];
   float option_value;
+  // constructor_table[0] =
+  // constructor_table[1]
 
   fscanf(aux_fp, "%s", planner_type);
   if (!strcmp(planner_type, "RRT")) { // Naive RRT
@@ -77,20 +81,6 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
                                          theStepSize,
                                          theSearchMinVal, theSearchRange,
                                          theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
-
-    while (fscanf(aux_fp, "%s %f", option_type, &option_value) != -1) {
-      if (!strcmp(option_type, "goalBias")) {
-        if (option_value >= 0.0 && option_value <= 1.0) {
-          rrt->setGoalBias(option_value);
-          printf("%s : %f\n", option_type, option_value);
-        } else {
-          fprintf(stderr, "$goalBias should be betewen 0.0 ~ 1.0\n");
-        }
-      } else {
-        fprintf(stderr, "Invalid option, %s : %f\n", option_type, option_value);
-      }
-    }
-
     ptrPlanner = rrt;
     printf("%s\n", "HolonomicRRT loaded");
   } else if (!strcmp(planner_type, "BiRRT")) { // BiRRT(Bi-directional RRT or RRT-connect)
@@ -100,11 +90,11 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
                                                theStepSize,
                                                theSearchMinVal, theSearchRange,
                                                theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
-
+/*
     while (fscanf(aux_fp, "%s %f", option_type, &option_value) != -1) {
       fprintf(stderr, "Following options are ignored, %s : %f\n", option_type, option_value);
     }
-
+*/
     ptrPlanner = birrt;
     printf("%s\n", "HolonomicBiRRT loaded");
   } else if (!strcmp(planner_type, "RRT*")) { // RRT*
@@ -114,27 +104,42 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
                                                       theStepSize,
                                                       theSearchMinVal, theSearchRange,
                                                       theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
+    ptrPlanner = rrt_star;
+    printf("%s\n", "HolonomicRRT* loaded");
+  } else if (!strcmp(planner_type, "RRG*")) { // RRG*
+    RRGstar* rrg_star = new RRGstar(theStartDummyID, theGoalDummyID,
+                                    theRobotCollectionID, theObstacleCollectionID, ikGroupID,
+                                    thePlanningType, theAngularCoeff,
+                                    theStepSize,
+                                    theSearchMinVal, theSearchRange,
+                                    theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
 
-    while (fscanf(aux_fp, "%s %f", option_type, &option_value) != -1) {
-      fprintf(stderr, "Following options are ignored, %s : %f\n", option_type, option_value);
+    ptrPlanner = rrg_star;
+    printf("%s\n", "HolonomicRRG* loaded");
+  } else {
+    fprintf(stderr, "%s\n", "Undefined planner type");
+    return;
+  }
+
+  while (fscanf(aux_fp, "%s %f", option_type, &option_value) != -1) {
+    if (!strcmp(option_type, "goalBias")) {
+      if (option_value >= 0.0 && option_value <= 1.0) {
+        ptrPlanner->setGoalBias(option_value);
+        printf("%s : %f\n", option_type, option_value);
+      } else {
+        fprintf(stderr, "$goalBias should be betewen 0.0 ~ 1.0\n");
+      }
+    } else if (!strcmp(option_type, "maxDistance")) {
+      if (option_value >= 0.0 && option_value <= 1.0) {
+        ptrPlanner->setMaxDistance(option_value);
+        printf("%s : %f\n", option_type, option_value);
+      } else {
+        fprintf(stderr, "$maxDistance should be betewen 0.0 ~ 1.0\n");
+      }
+    } else {
+      fprintf(stderr, "Invalid option, %s : %f\n", option_type, option_value);
     }
-
-		ptrPlanner = rrt_star;
-		printf("%s\n", "HolonomicRRT* loaded");
-	} else if (!strcmp(planner_type, "RRG*")) { // RRG*
-		RRGstar* rrg_star = new RRGstar(theStartDummyID, theGoalDummyID,
-				theRobotCollectionID, theObstacleCollectionID, ikGroupID,
-				thePlanningType, theAngularCoeff,
-				theStepSize,
-				theSearchMinVal, theSearchRange,
-				theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
-
-		ptrPlanner = rrg_star;
-		printf("%s\n", "HolonomicRRG* loaded");
-	} else {
-		fprintf(stderr, "%s\n", "Undefined planner type");
-		return;
-	}
+  }
 }
 
 CHolonomicPathPlanning::~CHolonomicPathPlanning() {
@@ -155,8 +160,16 @@ void CHolonomicPathPlanning::getSearchTreeData(std::vector<float>& data, bool fr
 }
 
 int CHolonomicPathPlanning::searchPath(int maxTimePerPass) {
-  // maxTimePerPass is in miliseconds
+  // maxTimePerPass is in milliseconds
   return ptrPlanner->searchPath(maxTimePerPass);
+}
+
+void CHolonomicPathPlanning::setGoalBias(float value) {
+  _goalBias = value;
+}
+
+void CHolonomicPathPlanning::setMaxDistance(float value) {
+  _maxDistance = value;
 }
 
 bool CHolonomicPathPlanning::setPartialPath() {

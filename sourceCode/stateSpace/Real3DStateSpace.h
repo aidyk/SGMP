@@ -10,9 +10,10 @@ class Real3DStateSpace : public StateSpace {
 	public:
 		Real3DStateSpace(const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv, int dimension);
 		virtual Real3DStateSpace* copyMyself();
-		virtual int getSize();
-
 		virtual void reSample(int theType, float searchMin[4], float searchRange[4]);
+        virtual int getVector(StateSpace* from, StateSpace* to, float vect[7], float e, float& artificialLength);
+
+		virtual int getSize();
 };
 
 #endif

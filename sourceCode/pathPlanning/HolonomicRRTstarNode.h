@@ -64,9 +64,10 @@ class HolonomicRRTstarNode : public CHolonomicPathNode
 		float getCost() { return _cost; }
 
 		void addChild(HolonomicRRTstarNode* child) { _children.push_back(child); }
-        void removeChild(HolonomicRRTstarNode* child);
-        void updateChildrenCosts(float delta_cost);
+		void removeChild(HolonomicRRTstarNode* child);
+		void updateChildrenCosts(float delta_cost);
 		// >
+		HolonomicRRTstarNode* obs;
 	private:
 		float _cost;
 		std::vector<HolonomicRRTstarNode*> _children;

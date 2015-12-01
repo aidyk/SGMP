@@ -64,6 +64,8 @@ public:
 
 	// Following functions are inherited from CPathPlanning:
 	virtual int searchPath(int maxTimePerPass);
+    virtual void setGoalBias(float value);
+    virtual void setMaxDistance(float value);
 	virtual bool setPartialPath();
 	virtual int smoothFoundPath(int steps,int maxTimePerPass);
 	virtual void getPathData(std::vector<float>& data);
@@ -92,5 +94,17 @@ private:
 
 	std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
 
-	CHolonomicPathPlanning* ptrPlanner;
+    // Adjustable parameters -
+    // Randomized approach can be applied, for the details refer to the following
+    // paper; Completely randomized RRT-connect proposed by D Schneider, ICRA2015
+    float _goalBias;
+    float _maxDistance;
+
+    CHolonomicPathPlanning* ptrPlanner;
+    CHolonomicPathPlanning* (*constructor_table[10]) (int theStartDummyID, int theGoalDummyID,
+                                                      int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
+                                                      int thePlanningType, float theAngularCoeff,
+                                                      float theStepSize,
+                                                      const float theSearchMinVal[4], const float theSearchRange[4],
+    const int theDirectionConstraints[4], const float clearanceAndMaxDistance[2], const C3Vector& gammaAxis);
 };

@@ -116,6 +116,8 @@ HolonomicRRTstar::HolonomicRRTstar(int theStartDummyID, int theGoalDummyID,
   _nn->setDistanceFunction(boost::bind(&HolonomicRRTstar::distance, this, _1, _2));
   _nn->add(start_node);
 
+  _collisionCache.resize(64);
+
   // Set ballRadiusMax and ballRadiusConst to maximum extent
   _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
 
@@ -143,14 +145,6 @@ HolonomicRRTstar::~HolonomicRRTstar() {
   }
 }
 
-void HolonomicRRTstar::setAngularCoefficient(float coeff) {
-  angularCoeff = coeff;
-}
-
-void HolonomicRRTstar::setStepSize(float size) {
-  stepSize = size;
-}
-
 float HolonomicRRTstar::getNearNeighborRadius() {
   // return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + fromStart.size()) / (1.0 + fromStart.size()), 0.33));
   return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.33));
@@ -158,7 +152,14 @@ float HolonomicRRTstar::getNearNeighborRadius() {
 
 float HolonomicRRTstar::distance(HolonomicRRTstarNode* a, HolonomicRRTstarNode* b) {
   float dist = 0.0;
-  if (planningType == sim_holonomicpathplanning_xyz) {
+  if (planningType == sim_holonomicpathplanning_xy) {
+    float vect[2];
+    vect[0] = a->values[0] - b->values[0];
+    vect[1] = a->values[1] - b->values[1];
+
+    dist = vect[0] * vect[0] + vect[1] * vect[1];
+
+  } else if (planningType == sim_holonomicpathplanning_xyz) {
     float vect[3];
     vect[0] = a->values[0] - b->values[0];
     vect[1] = a->values[1] - b->values[1];
@@ -339,10 +340,12 @@ std::vector<HolonomicRRTstarNode*> HolonomicRRTstar::getNearNeighborNodes(std::v
 
 void HolonomicRRTstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
   std::vector<HolonomicRRTstarNode*>* cont = new std::vector<HolonomicRRTstarNode*>();
-  if (fromTheStart)
+  if (fromTheStart) {
     _nn->list(*cont);
-  else
-    cont = reinterpret_cast<std::vector<HolonomicRRTstarNode*>*>(&fromGoal);
+  } else {
+    // cont = reinterpret_cast<std::vector<HolonomicRRTstarNode*>*>(&fromGoal);
+    return;
+  }
 
   if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
     for (int i = 1; i < int(cont->size()); i++) {
@@ -372,7 +375,6 @@ void HolonomicRRTstar::getSearchTreeData(std::vector<float>& data, bool fromTheS
     }
   } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
     for (int i = 1; i < int(cont->size()); i++) {
-      if ((*cont)[i] == fromGoal[0]) continue;
       C3Vector start((*cont)[i]->values[0], (*cont)[i]->values[1], (*cont)[i]->values[2]);
       C3Vector goal((*cont)[i]->parent->values[0], (*cont)[i]->parent->values[1], (*cont)[i]->parent->values[2]);
       start = _startDummyCTM * start;
@@ -390,7 +392,7 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
 #ifdef TIMELAPSE
   FILE *tfp = fopen("time_lapse.txt", "a");
 #endif
-  // maxTimePerPass is in miliseconds
+  // maxTimePerPass is in milliseconds
   if (invalidData)
     return(0);
   if ( (_nn->size() == 0) || (fromGoal.size() == 0) || (foundPath.size() != 0) )
@@ -417,29 +419,33 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
   while (_simGetTimeDiffInMs(initTime) < maxTimePerPass) {
     randNode->reSample(planningType, _searchMinVal, _searchRange);
 
-    // HolonomicRRTstarNode* closest = getClosestNode(*search_tree, randNode);
     HolonomicRRTstarNode* closest = _nn->nearest(randNode);
     float artificialCost, cArtificialCost;
     if (closest == NULL) continue;
 
+    // printf("%f:%f:%f ->", randNode->values[0], randNode->values[1], randNode->values[2]);
+    if (distance(randNode, closest) > _ballRadiusConst * _maxDistance) {
+      randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
+      // printf("%f:%f:%f (%f:%f:%f)\n", randNode->values[0], randNode->values[1], randNode->values[2],
+      //       closest->values[0], closest->values[1], closest->values[2]);
+    }
+
     HolonomicRRTstarNode* extended = extend(closest, randNode, false, startDummy, cArtificialCost);
     if (extended == NULL) continue;
 
-    // search_tree->push_back(extended);
     extended->parent = closest;
     extended->setCost(static_cast<HolonomicRRTstarNode*>(extended->parent)->getCost() + cArtificialCost);
 
-    // std::vector<HolonomicRRTstarNode*> neighbors = getNearNeighborNodes(*search_tree, extended, getNearNeighborRadius());
     std::vector<HolonomicRRTstarNode*> neighbors;
-    _nn->nearestR(extended, getNearNeighborRadius(), neighbors);
+    _nn->nearestR(extended, fmin(getNearNeighborRadius(), _maxDistance), neighbors);
 
-    while (_collisionCache.size() < neighbors.size()) { // Reallc the size of collision cache
-      _collisionCache.resize(_collisionCache.size() * 2 + 1);
+    if (_collisionCache.size() < neighbors.size()) { // Reallc the size of collision cache
+      _collisionCache.resize(_collisionCache.size() * 2);
     }
 
     HolonomicRRTstarNode* dummy;
     for (int i = 0; i < int(neighbors.size()); i++) { // Passive goal sampling
-      if (neighbors[i] == fromGoal[0]) continue;
+      // if (neighbors[i] == fromGoal[0]) continue;
       if (neighbors[i] != closest) {
         dummy = extend(neighbors[i], extended, true, startDummy, artificialCost); // dummy reused, bad + memory leak
         float cost = neighbors[i]->getCost() + artificialCost;
@@ -514,7 +520,7 @@ bool HolonomicRRTstar::setPartialPath() {
   // Thus it is need to manually set up the path
   if ((*from_goal)[0]->getCost() < SIM_MAX_FLOAT) {
   } else {
-    it = getClosestNode(*from_start, it);
+    it = _nn->nearest((*from_start)[0]);
   }
 
   while (it != NULL) {
@@ -522,152 +528,9 @@ bool HolonomicRRTstar::setPartialPath() {
     it = static_cast<HolonomicRRTstarNode*>(it->parent);
   }
 
+  printf("# of nodes : %d\n", _nn->size());
+
   return(true);
-}
-
-HolonomicRRTstarNode* HolonomicRRTstar::getClosestNode(std::vector<HolonomicRRTstarNode*>& nodes, HolonomicRRTstarNode* sample) {
-  float minD = SIM_MAX_FLOAT;
-  int index = -1;
-
-  if (planningType == sim_holonomicpathplanning_xyz) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      if (areDirectionConstraintsRespected(vect)) {
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = CPathPlanningInterface::getNormalizedAngle(sample->values[2] - nodes[i]->values[2]);
-      if (areDirectionConstraintsRespected(vect)) {
-        vect[2] *= angularCoeff;
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_abg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[0] = diff(0);
-      vect[1] = diff(1);
-      vect[2] = diff(2);
-      vect[3] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float d = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        d *= d;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyzg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      vect[3] = CPathPlanningInterface::getNormalizedAngle(sample->values[3] - nodes[i]->values[3]);
-      if (areDirectionConstraintsRespected(vect)) {
-        vect[3] *= angularCoeff;
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + vect[3] * vect[3];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[5];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[1] = diff(0);
-      vect[2] = diff(1);
-      vect[3] = diff(2);
-      vect[4] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[6];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[2] = diff(0);
-      vect[3] = diff(1);
-      vect[4] = diff(2);
-      vect[5] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else { // (planningType==sim_holonomicpathplanning_xyzabg)
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[7];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[3] = diff(0);
-      vect[4] = diff(1);
-      vect[5] = diff(2);
-      vect[6] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  }
-  if (index != -1)
-    return(nodes[index]);
-  return(NULL);
 }
 
 HolonomicRRTstarNode* HolonomicRRTstar::slerp(HolonomicRRTstarNode* from, HolonomicRRTstarNode* to, float t) {
@@ -695,7 +558,7 @@ HolonomicRRTstarNode* HolonomicRRTstar::extend(HolonomicRRTstarNode* from, Holon
   for (currentPass = 0; currentPass < passes; currentPass++) {
     pos += delta_p;
 
-    if (planningType == sim_holonomicpathplanning_xyz)
+    if (planningType == sim_holonomicpathplanning_xyz || planningType == sim_holonomicpathplanning_xy)
       orient.setIdentity();
     else if (planningType == sim_holonomicpathplanning_xyzabg)
       orient *= delta_q;
@@ -1011,7 +874,8 @@ bool HolonomicRRTstar::addVector(C3Vector& pos, C4Vector& orient, float vect[7])
     auxVect[5] = orient(2);
     auxVect[6] = orient(3);
   }
-  return(!areSomeValuesForbidden(auxVect));
+  return true;
+  // return(!areSomeValuesForbidden(auxVect));
 }
 
 int HolonomicRRTstar::smoothFoundPath(int steps, int maxTimePerPass) {
@@ -1167,113 +1031,7 @@ void HolonomicRRTstar::getPathData(std::vector<float>& data) {
 }
 
 bool HolonomicRRTstar::areDirectionConstraintsRespected(float vect[7]) {
-  if (planningType == sim_holonomicpathplanning_xy) {
-    if (!_directionConstraintsOn)
-      return(true);
-    for (int i = 0; i < 2; i++) {
-      if ( (_directionConstraints[i] == -1) && (vect[i] > 0.0f) )
-        return(false);
-      if ( (_directionConstraints[i] == +1) && (vect[i] < 0.0f) )
-        return(false);
-    }
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xg) {
-    CPathPlanningInterface::getNormalizedAngle(vect[1]);
-    if (!_directionConstraintsOn)
-      return(true);
-    if ( (_directionConstraints[0] == -1) && (vect[0] > 0.0f) )
-      return(false);
-    if ( (_directionConstraints[0] == +1) && (vect[0] < 0.0f) )
-      return(false);
-    if ( (_directionConstraints[3] == -1) && (vect[1] > 0.0f) )
-      return(false);
-    if ( (_directionConstraints[3] == +1) && (vect[1] < 0.0f) )
-      return(false);
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xyz) {
-    if (!_directionConstraintsOn)
-      return(true);
-    for (int i = 0; i < 3; i++) {
-      if ( (_directionConstraints[i] == -1) && (vect[i] > 0.0f) )
-        return(false);
-      if ( (_directionConstraints[i] == +1) && (vect[i] < 0.0f) )
-        return(false);
-    }
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xyg) {
-    CPathPlanningInterface::getNormalizedAngle(vect[2]);
-    if (!_directionConstraintsOn)
-      return(true);
-    for (int i = 0; i < 2; i++) {
-      if ( (_directionConstraints[i] == -1) && (vect[i] > 0.0f) )
-        return(false);
-      if ( (_directionConstraints[i] == +1) && (vect[i] < 0.0f) )
-        return(false);
-    }
-    if ( (_directionConstraints[3] == -1) && (vect[2] > 0.0f) )
-      return(false);
-    if ( (_directionConstraints[3] == +1) && (vect[2] < 0.0f) )
-      return(false);
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_abg) {
-    // No direction constraints for A,B,G here!
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xyzg) {
-    CPathPlanningInterface::getNormalizedAngle(vect[3]);
-    if (!_directionConstraintsOn)
-      return(true);
-    for (int i = 0; i < 3; i++) {
-      if ( (_directionConstraints[i] == -1) && (vect[i] > 0.0f) )
-        return(false);
-      if ( (_directionConstraints[i] == +1) && (vect[i] < 0.0f) )
-        return(false);
-    }
-    if ( (_directionConstraints[3] == -1) && (vect[3] > 0.0f) )
-      return(false);
-    if ( (_directionConstraints[3] == +1) && (vect[3] < 0.0f) )
-      return(false);
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xabg) {
-    // No direction constraints for A,B,G here!
-    if (!_directionConstraintsOn)
-      return(true);
-    if ( (_directionConstraints[0] == -1) && (vect[0] > 0.0f) )
-      return(false);
-    if ( (_directionConstraints[0] == +1) && (vect[0] < 0.0f) )
-      return(false);
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xyabg) {
-    // No direction constraints for A,B,G here!
-    if (!_directionConstraintsOn)
-      return(true);
-    for (int i = 0; i < 2; i++) {
-      if ( (_directionConstraints[i] == -1) && (vect[i] > 0.0f) )
-        return(false);
-      if ( (_directionConstraints[i] == +1) && (vect[i] < 0.0f) )
-        return(false);
-    }
-    return(true);
-  }
-  if (planningType == sim_holonomicpathplanning_xyzabg) {
-    // No direction constraints for A,B,G here!
-    if (!_directionConstraintsOn)
-      return(true);
-    for (int i = 0; i < 3; i++) {
-      if ( (_directionConstraints[i] == -1) && (vect[i] > 0.0f) )
-        return(false);
-      if ( (_directionConstraints[i] == +1) && (vect[i] < 0.0f) )
-        return(false);
-    }
-    return(true);
-  }
-  return(true);
+  return true;
 }
 
 bool HolonomicRRTstar::areSomeValuesForbidden(C7Vector configuration) {

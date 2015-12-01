@@ -41,19 +41,20 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
-#include "HolonomicRRT.h"
+#include "LazyRRGstar.h"
 #include "pathPlanningInterface.h"
 #include "v_repLib.h"
 
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
 
-HolonomicRRT::HolonomicRRT(int theStartDummyID, int theGoalDummyID,
+LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
                                int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
                                int thePlanningType, float theAngularCoeff,
                                float theStepSize,
                                const float theSearchMinVal[4], const float theSearchRange[4],
-                               const int theDirectionConstraints[4], const float clearanceAndMaxDistance[2], const C3Vector& gammaAxis) {
+                               const int theDirectionConstraints[4], const float clearanceAndMaxDistance[2], const C3Vector& gammaAxis)
+{
   isHolonomic = true;
   float angle = C3Vector::unitZVector.getAngle(gammaAxis);
   if (angle < 0.1f * degToRad)
@@ -90,13 +91,11 @@ HolonomicRRT::HolonomicRRT(int theStartDummyID, int theGoalDummyID,
   C7Vector sConf;
   sConf.setIdentity();
 
-  HolonomicRRTNode* start_node = new HolonomicRRTNode(planningType, sConf, _gammaAxisRotation, _gammaAxisRotationInv);
-  HolonomicRRTNode* goal_node = new HolonomicRRTNode(planningType, goalDummyLocalConf, _gammaAxisRotation, _gammaAxisRotationInv);
-	fromStart.push_back(start_node);
-  fromGoal.push_back(goal_node);
+  _start_node = new LazyRRGstarNode(planningType, sConf, _gammaAxisRotation, _gammaAxisRotationInv);
+  _goal_node = new LazyRRGstarNode(planningType, goalDummyLocalConf, _gammaAxisRotation, _gammaAxisRotationInv);
 
-  start_node->setCost(0);
-  goal_node->setCost(SIM_MAX_FLOAT * 0.01f);
+  _start_node->setCost(0);
+  _goal_node->setCost(SIM_MAX_FLOAT * 0.01f);
 
   robotCollectionID = theRobotCollectionID;
   obstacleCollectionID = theObstacleCollectionID;
@@ -113,11 +112,20 @@ HolonomicRRT::HolonomicRRT(int theStartDummyID, int theGoalDummyID,
       _directionConstraintsOn = true;
   }
 
+  _nn.reset(new ompl::NearestNeighborsLinear<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
+  _nn->setDistanceFunction(boost::bind(&LazyRRGstar::distance, this, _1, _2));
+  _nn->add(_start_node);
+  _nn->add(_goal_node);
+
+  // Set ballRadiusMax and ballRadiusConst to maximum extent
+  _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
+  _best_cost = SIM_MAX_FLOAT;
+
   buffer[0] = -1; // What the hell is this?
   invalidData = false;
 }
 
-HolonomicRRT::~HolonomicRRT() {
+LazyRRGstar::~LazyRRGstar() {
   for (int i = 0; i < int(fromStart.size()); i++)
     delete fromStart[i];
   fromStart.clear();
@@ -127,17 +135,30 @@ HolonomicRRT::~HolonomicRRT() {
   for (int i = 0; i < int(foundPath.size()); i++)
     delete foundPath[i];
   foundPath.clear();
+	if (_nn) {
+    std::vector<LazyRRGstarNode*> node_list;
+    _nn->list(node_list);
+    for (int i = 0; i < int(node_list.size()); i++) {
+      delete node_list[i];
+    }
+    // _nn->clear();
+  }
 }
 
-void HolonomicRRT::setAngularCoefficient(float coeff) {
+void LazyRRGstar::setAngularCoefficient(float coeff) {
   angularCoeff = coeff;
 }
 
-void HolonomicRRT::setStepSize(float size) {
+void LazyRRGstar::setStepSize(float size) {
   stepSize = size;
 }
 
-float HolonomicRRT::distance(HolonomicRRTNode* a, HolonomicRRTNode* b) {
+float LazyRRGstar::getNearNeighborRadius() {
+  // return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + fromStart.size()) / (1.0 + fromStart.size()), 0.33));
+  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.33));
+}
+
+float LazyRRGstar::distance(LazyRRGstarNode* a, LazyRRGstarNode* b) {
   float dist = 0.0;
   if (planningType == sim_holonomicpathplanning_xyz) {
     float vect[3];
@@ -162,203 +183,88 @@ float HolonomicRRT::distance(HolonomicRRTNode* a, HolonomicRRTNode* b) {
   return sqrt(dist);
 }
 
-std::vector<HolonomicRRTNode*> HolonomicRRT::getNearNeighborNodes(std::vector<HolonomicRRTNode*>& nodes,
-		HolonomicRRTNode* query, float radius) {
-  std::vector<HolonomicRRTNode*> neighbors;
-  nodes.push_back(static_cast<HolonomicRRTNode*>(fromGoal[0]));
+void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
+  std::vector<LazyRRGstarNode*> cont;
+  _nn->list(cont);
 
-  if (planningType == sim_holonomicpathplanning_xy) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[2];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
+  if (fromTheStart) {
+    if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
+      for (int i = 1; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
+        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+      }
 
-      float d = vect[0] * vect[0] + vect[1] * vect[1];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
+    } else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
+      for (int i = 1; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
+        C3Vector goal(cont[i]->pred->values[0], 0.0f, 0.0f);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+      }
+
+    } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
+      for (int i = 0; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+      }
     }
-  } else if (planningType == sim_holonomicpathplanning_xg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[2];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = CPathPlanningInterface::getNormalizedAngle(query->values[1] - nodes[i]->values[1]);
-      vect[1] *= angularCoeff;
+  } else { // !fromTheStart
+    if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
+      for (int i = 0; i < int(cont.size()); i++) {
+        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
+        start = _startDummyCTM * start;
+        goal = _startDummyCTM * goal;
+        float d[6];
+        start.copyTo(d);
+        goal.copyTo(d + 3);
+        for (int j = 0; j < 6; j++)
+          data.push_back(d[j]);
+        /*
+        for (int j = 0; j < it->_nodes.size(); j++) {
+          LazyRRGstarNode* jt = it->_nodes[j].node();
+          if (jt == it->pred) continue;
 
-      float d = vect[0] * vect[0] + vect[1] * vect[1];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyz) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = query->values[2] - nodes[i]->values[2];
-
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = CPathPlanningInterface::getNormalizedAngle(query->values[2] - nodes[i]->values[2]);
-      vect[2] *= angularCoeff;
-
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_abg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[0] = diff(0);
-      vect[1] = diff(1);
-      vect[2] = diff(2);
-      vect[3] = diff(3);
-
-      float d = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      d *= d;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyzg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = query->values[2] - nodes[i]->values[2];
-      vect[3] = CPathPlanningInterface::getNormalizedAngle(query->values[3] - nodes[i]->values[3]);
-
-      vect[3] *= angularCoeff;
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + vect[3] * vect[3];
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[5];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[1] = diff(0);
-      vect[2] = diff(1);
-      vect[3] = diff(2);
-      vect[4] = diff(3);
-
-      float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      float d = vect[0] * vect[0] + ad * ad;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[6];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[2] = diff(0);
-      vect[3] = diff(1);
-      vect[4] = diff(2);
-      vect[5] = diff(3);
-
-      float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + ad * ad;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  } else { // (planningType==sim_holonomicpathplanning_xyzabg)
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[7];
-      vect[0] = query->values[0] - nodes[i]->values[0];
-      vect[1] = query->values[1] - nodes[i]->values[1];
-      vect[2] = query->values[2] - nodes[i]->values[2];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      query->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[3] = diff(0);
-      vect[4] = diff(1);
-      vect[5] = diff(2);
-      vect[6] = diff(3);
-
-      float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-      float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + ad * ad;
-      if (d > radius * radius) continue;
-      neighbors.push_back(nodes[i]);
-    }
-  }
-  nodes.pop_back();
-
-  return neighbors;
-}
-
-void HolonomicRRT::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
-  std::vector<HolonomicRRTNode*>* cont;
-  if (fromTheStart)
-    cont = reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromStart);
-  else
-    return;
-
-  if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
-    for (int i = 1; i < int(cont->size()); i++) {
-      C3Vector start((*cont)[i]->values[0], (*cont)[i]->values[1], 0.0f);
-      C3Vector goal((*cont)[i]->parent->values[0], (*cont)[i]->parent->values[1], 0.0f);
-      start = _startDummyCTM * start;
-      goal = _startDummyCTM * goal;
-      float d[6];
-      start.copyTo(d);
-      goal.copyTo(d + 3);
-      for (int j = 0; j < 6; j++)
-        data.push_back(d[j]);
-    }
-  } else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
-    for (int i = 1; i < int(cont->size()); i++) {
-      C3Vector start((*cont)[i]->values[0], 0.0f, 0.0f);
-      C3Vector goal((*cont)[i]->parent->values[0], 0.0f, 0.0f);
-      start = _startDummyCTM * start;
-      goal = _startDummyCTM * goal;
-      float d[6];
-      start.copyTo(d);
-      goal.copyTo(d + 3);
-      for (int j = 0; j < 6; j++)
-        data.push_back(d[j]);
-    }
-  } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
-    for (int i = 1; i < int(cont->size()); i++) {
-      C3Vector start((*cont)[i]->values[0], (*cont)[i]->values[1], (*cont)[i]->values[2]);
-      C3Vector goal((*cont)[i]->parent->values[0], (*cont)[i]->parent->values[1], (*cont)[i]->parent->values[2]);
-      start = _startDummyCTM * start;
-      goal = _startDummyCTM * goal;
-      float d[6];
-      start.copyTo(d);
-      goal.copyTo(d + 3);
-      for (int j = 0; j < 6; j++)
-        data.push_back(d[j]);
+          C3Vector start(it->values[0], it->values[1], it->values[2]);
+          C3Vector goal(jt->values[0], jt->values[1], jt->values[2]);
+          start = _startDummyCTM * start;
+          goal = _startDummyCTM * goal;
+          float d[6];
+          start.copyTo(d);
+          goal.copyTo(d + 3);
+          for (int k = 0; k < 6; k++)
+            data.push_back(d[k]);
+        }
+        */
+      }
     }
   }
 }
 
-int HolonomicRRT::searchPath(int maxTimePerPass) {
+int LazyRRGstar::searchPath(int maxTimePerPass) {
   // maxTimePerPass is in miliseconds
   if (invalidData)
     return(0);
-  if ( (fromStart.size() == 0) || (fromGoal.size() == 0) || (foundPath.size() != 0) )
+  if (foundPath.size() != 0)
     return(0);
 
   CDummyDummy* startDummy = (CDummyDummy*)_simGetObject(startDummyID);
@@ -376,51 +282,55 @@ int HolonomicRRT::searchPath(int maxTimePerPass) {
   if (maxTimePerPass == 131183)
     return(61855195);
 
-  std::vector<HolonomicRRTNode*>* current =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromStart);
-  std::vector<HolonomicRRTNode*>* from_goal =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromGoal);
-
   int foundAPath = 0;
   int initTime = simGetSystemTimeInMs(-1);
-  HolonomicRRTNode* randNode = new HolonomicRRTNode(planningType, _searchMinVal, _searchRange, _gammaAxisRotation, _gammaAxisRotationInv);
-  bool isGoalBiased = false;
+  LazyRRGstarNode* randNode = new LazyRRGstarNode(planningType, _searchMinVal, _searchRange, _gammaAxisRotation, _gammaAxisRotationInv);
   while (_simGetTimeDiffInMs(initTime) < maxTimePerPass) {
-    if (_goalBias < SIM_RAND_FLOAT) { // Sample goal configuration.
-      isGoalBiased = true;
-      randNode->setAllValues(fromGoal[0]->values);
-    } else {
-      isGoalBiased = false;
-      randNode->reSample(planningType, _searchMinVal, _searchRange);
-    }
+    randNode->reSample(planningType, _searchMinVal, _searchRange);
 
-    // HolonomicRRTNode* closest = getClosestNode(*search_tree, randNode);
-    HolonomicRRTNode* closest = getClosestNode(*current, randNode);
+    if (!isFree(randNode, startDummy)) continue;
+
+    LazyRRGstarNode* closest = _nn->nearest(randNode);
     float artificialCost, cArtificialCost;
     if (closest == NULL) continue;
 
-    if (distance(randNode, closest) > _maxDistance) {
-      randNode->interpolate(closest, _maxDistance, angularCoeff);
-      isGoalBiased = false;
+    if (distance(randNode, closest) > _ballRadiusConst * _maxDistance) {
+      randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
     }
 
-    HolonomicRRTNode* extended = extend(closest, randNode, isGoalBiased, startDummy, cArtificialCost);
+    /*
+    LazyRRGstarNode* extended = extend(closest, randNode, true, startDummy, cArtificialCost);
     if (extended == NULL) continue;
+    */
+    LazyRRGstarNode* extended = lazyExtend(closest, randNode, true, startDummy, cArtificialCost);
 
-    extended->parent = closest;
-    extended->setCost(static_cast<HolonomicRRTNode*>(extended->parent)->getCost() + cArtificialCost);
-    fromStart.push_back(extended);
+#ifdef PRESORT
+    vector<pair<float, LazyRRGstarNode*> > associated_neighbors;
+    associated_neighbors.push_back(pair<float, LazyRRGstarNode*>(closest->getCost() + cArtificialCost, closest));
+#endif
 
-    if (isGoalBiased) {
-      HolonomicRRTNode* it = extended;
+    std::vector<LazyRRGstarNode*> neighbors;
+    _nn->nearestR(extended, getNearNeighborRadius(), neighbors);
+    _nn->add(extended);
+    extended->addNode(closest, cArtificialCost);
+    closest->addNode(extended, cArtificialCost);
 
-      while (it != NULL) {
-        foundPath.insert(foundPath.begin(), it->copyYourself());
-        it = static_cast<HolonomicRRTNode*>(it->parent);
-      }
-      foundAPath = true;
-      break;
+    LazyRRGstarNode* dummy;
+    for (int i = 0; i < neighbors.size(); i++) if (neighbors[i] != closest) {
+      if (neighbors[i] == _goal_node)
+        std::swap(neighbors[i], neighbors[neighbors.size() - 1]);
+      dummy = lazyExtend(extended, neighbors[i], true, startDummy, artificialCost);
+
+      extended->addNode(neighbors[i], artificialCost);
+      neighbors[i]->addNode(extended, artificialCost);
+
+#ifdef PRESORT
+      associated_neighbors.push_back(pair<float, LazyRRGstarNode*>(neighbors[i]->getCost() + artificialCost, neighbors[i]));
+#endif
     }
+    DynamicDecrease(extended); // Similar to UpdateChildren
+
+    DynamicShortestPathUpdate(startDummy); // LazyUpdate including DynamicIncrease
   }
   delete randNode;
 
@@ -432,191 +342,219 @@ int HolonomicRRT::searchPath(int maxTimePerPass) {
   return(foundAPath);
 }
 
+/*
+void LazyRRGstar::DynamicShortestPathUpdate(LazyRRGstarNode *node, vector<pair<float, LazyRRGstarNode *> > &associated_neighbors) {
+#ifdef PRESORT
+  // increasing-order in terms of v.cost + d(v, w)
+  sort(associated_neighbors.begin(), associated_neighbors.end());
+  for (int i = 0; i < associated_neighbors.size(); i++) {
+    LazyRRGstarNode *neighbor = associated_neighbors[i].second;
+    float new_cost = associated_neighbors[i].first;
+    if (node->getCost() < new_cost) {
+      node->setCost(new_cost);
+      node->pred = neighbor;
+    }
+    float delta = neighbor->getCost() - (node->getCost() + new_cost - neighbor->getCost());
+    if (delta < 0) {
+      neighbor->setCost(node->getCost() + new_cost - neighbor->getCost());
+      neighbor->pred = node;
+    }
+  }
+#else
+#endif
+
+  LazyRRGstarNode *tracer = _goal_node;
+  vector<LazyRRGstarNode*> solution_path;
+  if (_goal_node->getCost() < _best_cost) {
+
+  }
+}
+*/
+
+void LazyRRGstar::DynamicShortestPathUpdate(CDummyDummy *startDummy) {
+  LazyRRGstarNode *tracer = _goal_node;
+  vector<LazyRRGstarNode*> solution_path;
+  if (_goal_node->getCost() >= _best_cost) return; // No better 'potential' solution path found this iteration
+
+  // Cutting point priority? from start or goal?
+  // From start is more plausible, stable and would be faster!
+
+  while (tracer->pred != NULL) {
+    solution_path.push_back(tracer);
+    tracer = tracer->pred;
+  }
+
+  for (int i = solution_path.size() - 1; i >= 1; i--) {
+    LazyRRGstarNode* from = solution_path[i];
+    LazyRRGstarNode* to = solution_path[i- 1];
+
+    float artificialCost;
+    LazyRRGstarNode* dummy = extend(from, to, true, startDummy, artificialCost);
+    if (!dummy) { // collision found
+      // Remove invalid edge and handle other things to maintain the shortestpath tree.
+      from->removeNode(to);
+      to->removeNode(from);
+      // needless to say 'to->pred == from'
+      DynamicDelete(from, to);
+    }
+  }
+}
+
+// Pre-condition :
+void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
+  typedef pair<float, LazyRRGstarNode*> weight_node;
+  priority_queue<weight_node> M;
+  priority_queue<weight_node> Q;
+  /*
+  to->setCost(SIM_MAX_FLOAT);
+  to->pred = NULL;
+  */
+
+  // Color 0 : white, 1 : pink, 2 : red
+
+  M.push(weight_node(to->getCost(), to));
+  while (!M.empty()) {
+    weight_node top = M.top();
+    M.pop();
+
+    LazyRRGstarNode *node = top.second;
+    for (int i = 0; i < node->edges().size(); i++) {
+      LazyRRGstarNode *adj = node->edges()[i].node();
+      float cost = adj->getCost();
+      if (adj->getCost() + cost == top.first && adj->color != 2) {
+        // would really rarely happens.
+        node->pred = adj;
+        node->color = 1;
+      } else {
+        node->color = 2;
+
+        for (int i = 0; i < node->edges().size(); i++) {
+          LazyRRGstarNode *child = node->edges()[i].node();
+        }
+      }
+    }
+  }
+}
+
+// Pre-condition : to->pred == from
+void LazyRRGstar::DynamicDelete(LazyRRGstarNode *from, LazyRRGstarNode *to) {
+}
+
+// Pre-condition : node has its own closeset parent node, and to be updated to find
+// better parent. It propagtates cost changes downstream from the initial input node.
+void LazyRRGstar::DynamicDecrease(LazyRRGstarNode *node) {
+  typedef pair<float, LazyRRGstarNode*> weight_node;
+  priority_queue<weight_node> pq;
+  pq.push(weight_node(node->getCost(), node));
+
+  while (!pq.empty()) {
+    weight_node top = pq.top();
+    pq.pop();
+    float cost = top.first;
+    LazyRRGstarNode* node = top.second;
+
+    if (cost > node->getCost()) continue;
+
+    std::vector<LazyRRGstarNode::Edge> &edges = node->edges();
+    for (int i = 0; i < edges.size(); i++) {
+      LazyRRGstarNode *adj = edges[i].node();
+      float c = edges[i].cost();
+      if (adj->getCost() > node->getCost() + c) {
+        adj->setCost(node->getCost() + c);
+        adj->pred = node;
+        pq.push(weight_node(adj->getCost(), adj));
+      }
+    }
+  }
+}
+
+// Return best solution path in the current roadmap using traditional A* algorithm.
+float LazyRRGstar::getBestSolutionPath(LazyRRGstarNode* goal_node) {
+  priority_queue<LazyRRGstarNode*> pq;
+  LazyRRGstarNode* s = _start_node;
+
+  s->color = 1; // Gray.
+  s->d = 0;
+  s->f = distance(s, goal_node);
+  pq.push(s);
+
+  while (!pq.empty()) {
+    LazyRRGstarNode* top = pq.top();
+    pq.pop();
+
+    for (int i = 0; i < top->_edges.size(); i++) {
+      LazyRRGstarNode::Edge &edge = top->_edges[i];
+
+      float dist = edge.cost();
+      if (dist + top->d < edge.node()->d) {
+        edge.node()->d = dist + top->d;
+        edge.node()->f = edge.node()->d + distance(edge.node(), goal_node);
+        edge.node()->pred = top;
+
+        if (edge.node()->color == 0) { // White.
+          edge.node()->color = 1;
+          pq.push(edge.node());
+        } else if (edge.node()->color == 2) { // Black.
+          edge.node()->color = 1;
+          pq.push(edge.node());
+        }
+      }
+    }
+    top->color = 2;
+  }
+
+  if (goal_node->color != 2) { // Failed to find a solution path
+    return 0.0;
+  } else { // It must be black!
+    LazyRRGstarNode* back_track = goal_node;
+    while (back_track->pred != NULL) {
+      foundPath.push_back(back_track);
+      back_track = back_track->pred;
+    }
+    foundPath.push_back(back_track);
+  }
+  reverse(foundPath.begin(), foundPath.end());
+  return 1.0;
+}
+
 // 'it' should be connected to the root node and has proper cost
-bool HolonomicRRT::gotPotential(HolonomicRRTNode* it) {
-  HolonomicRRTNode* goal_conf = static_cast<HolonomicRRTNode*>(fromGoal[0]);
+bool LazyRRGstar::gotPotential(LazyRRGstarNode* it) {
+  LazyRRGstarNode* goal_conf = static_cast<LazyRRGstarNode*>(fromGoal[0]);
   if (goal_conf->getCost() >= SIM_MAX_FLOAT || (distance(goal_conf, it) + it->getCost() < goal_conf->getCost())) {
     return true;
   }
   return false;
 }
 
-bool HolonomicRRT::setPartialPath() {
-  std::vector<HolonomicRRTNode*>* from_start =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromStart);
-  std::vector<HolonomicRRTNode*>* from_goal =
-    reinterpret_cast<std::vector<HolonomicRRTNode*>*>(&fromGoal);
-  HolonomicRRTNode* it = (*from_goal)[0];
+bool LazyRRGstar::setPartialPath() {
+  vector<LazyRRGstarNode*> path;
 
-  // Our goal is never gonna be included in our serach_tree(fromStart)
-  // Thus it is necessary to manually set up the path
-  if ((*from_goal)[0]->getCost() < SIM_MAX_FLOAT) {
-  } else {
-    it = getClosestNode(*from_start, it);
+  printf("%d\n", _nn->size());
+
+  vector<LazyRRGstarNode*> nodes;
+  _nn->list(nodes);
+
+  int sum_degree = 0;
+  for (int i = 0; i < nodes.size(); i++) {
+    sum_degree += nodes[i]->_edges.size();
   }
 
-  while (it != NULL) {
-    foundPath.insert(foundPath.begin(), it->copyYourself());
-    it = static_cast<HolonomicRRTNode*>(it->parent);
-  }
+  printf("Avg. Degree : %f\n", sum_degree / (double)nodes.size());
 
-  return(true);
+  if (getBestSolutionPath(_goal_node) == 0.0)
+    return false;
+  return true;
 }
 
-HolonomicRRTNode* HolonomicRRT::getClosestNode(std::vector<HolonomicRRTNode*>& nodes, HolonomicRRTNode* sample) {
-  float minD = SIM_MAX_FLOAT;
-  int index = -1;
-
-  if (planningType == sim_holonomicpathplanning_xyz) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      if (areDirectionConstraintsRespected(vect)) {
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[3];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = CPathPlanningInterface::getNormalizedAngle(sample->values[2] - nodes[i]->values[2]);
-      if (areDirectionConstraintsRespected(vect)) {
-        vect[2] *= angularCoeff;
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_abg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[0] = diff(0);
-      vect[1] = diff(1);
-      vect[2] = diff(2);
-      vect[3] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float d = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        d *= d;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyzg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[4];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      vect[3] = CPathPlanningInterface::getNormalizedAngle(sample->values[3] - nodes[i]->values[3]);
-      if (areDirectionConstraintsRespected(vect)) {
-        vect[3] *= angularCoeff;
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + vect[3] * vect[3];
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[5];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[1] = diff(0);
-      vect[2] = diff(1);
-      vect[3] = diff(2);
-      vect[4] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else if (planningType == sim_holonomicpathplanning_xyabg) {
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[6];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[2] = diff(0);
-      vect[3] = diff(1);
-      vect[4] = diff(2);
-      vect[5] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  } else { // (planningType==sim_holonomicpathplanning_xyzabg)
-    for (int i = 0; i < int(nodes.size()); i++) {
-      float vect[7];
-      vect[0] = sample->values[0] - nodes[i]->values[0];
-      vect[1] = sample->values[1] - nodes[i]->values[1];
-      vect[2] = sample->values[2] - nodes[i]->values[2];
-      C4Vector toP, fromP;
-      C3Vector dum;
-      sample->getAllValues(dum, toP);
-      nodes[i]->getAllValues(dum, fromP);
-      C4Vector diff(fromP.getInverse()*toP);
-      vect[3] = diff(0);
-      vect[4] = diff(1);
-      vect[5] = diff(2);
-      vect[6] = diff(3);
-      if (areDirectionConstraintsRespected(vect)) {
-        float ad = angularCoeff * fromP.getAngleBetweenQuaternions(toP);
-        float d = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2] + ad * ad;
-        if (d < minD) {
-          minD = d;
-          index = i;
-        }
-      }
-    }
-  }
-  if (index != -1)
-    return(nodes[index]);
-  return(NULL);
-}
-
-HolonomicRRTNode* HolonomicRRT::slerp(HolonomicRRTNode* from, HolonomicRRTNode* to, float t) {
+LazyRRGstarNode* LazyRRGstar::slerp(LazyRRGstarNode* from, LazyRRGstarNode* to, float t) {
   return to;
 }
 
-HolonomicRRTNode* HolonomicRRT::extend(HolonomicRRTNode* from, HolonomicRRTNode* to,
-                                               bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost) {
+LazyRRGstarNode* LazyRRGstar::extend(LazyRRGstarNode* from, LazyRRGstarNode* to,
+                             bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost) {
   // Return value is != NULL if extention was performed and connect is false
   // If connect is true, then return value indicates that connection can be performed!
-  HolonomicRRTNode* extended = from->copyYourself();
+  LazyRRGstarNode* extended = from->copyYourself();
   float theVect[7] = {0.0, };
   int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
   int currentPass;
@@ -672,7 +610,103 @@ HolonomicRRTNode* HolonomicRRT::extend(HolonomicRRTNode* from, HolonomicRRTNode*
   return(NULL);
 }
 
-int HolonomicRRT::getVector(HolonomicRRTNode* fromPoint, HolonomicRRTNode* toPoint, float vect[7], float e, float& artificialLength, bool dontDivide) {
+LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode* to,
+                                         bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost) {
+  // Return value is != NULL if extention was performed and connect is false
+  // If connect is true, then return value indicates that connection can be performed!
+  LazyRRGstarNode* extended = to->copyYourself();
+  artificialCost = distance(from, to);
+
+  return extended;
+}
+
+bool LazyRRGstar::isFree(LazyRRGstarNode* node, CDummyDummy* dummy) {
+  C3Vector pos(node->values);
+  C4Vector orient(node->values + 3);
+
+  if (planningType == sim_holonomicpathplanning_xyg) {
+    orient = _gammaAxisRotation * C4Vector(C3Vector(0.0f, 0.0f, pos(2))) * _gammaAxisRotationInv;
+    pos(2) = 0.0;
+  } else if (planningType == sim_holonomicpathplanning_xyz)
+    orient.setIdentity();
+
+  C7Vector transf(orient, pos);
+  C7Vector tmpTr(_startDummyLTM * transf);
+  _simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
+  if (doCollide(NULL)) // Collision Check
+    return true;
+  return false;
+}
+
+  /*
+  if (planningType == sim_holonomicpathplanning_xyg) {
+    orient = _gammaAxisRotation * C4Vector(C3Vector(0.0f, 0.0f, pos(2))) * _gammaAxisRotationInv;
+  }
+
+  for (currentPass = 0; currentPass < passes; currentPass++) {
+    pos += delta_p;
+    magnitude += delta_magnitude;
+
+    if (planningType == sim_holonomicpathplanning_xyz)
+      orient.setIdentity();
+    else if (planningType == sim_holonomicpathplanning_xyzabg)
+      orient *= delta_q;
+    else if (planningType == sim_holonomicpathplanning_xyg) {
+      orient *= _gammaAxisRotation * C4Vector(C3Vector(0.0f, 0.0f, delta_p(2))) * _gammaAxisRotationInv;
+      pos(2) = 0.0;
+    }
+
+    bool skipCollisionCheck = false;
+    if (magnitude < from->radius() || artificialCost - magnitude < to->radius()) { //
+      skipCollisionCheck = true;
+    }
+
+    if (!skipCollisionCheck) {
+      C7Vector transf(orient, pos);
+      C7Vector tmpTr(_startDummyLTM * transf);
+      _simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
+      if (doCollide(NULL)) { // Collision Check
+        // If collision occured and the magnitude is less than its radius
+        // update it.
+        extended->setAllValues(pos, orient);
+        HolonomicPBRRTstarNode *limiter = extended->copyYourself();
+        if (magnitude < from->getRadius()) {
+          from->setRadius(magnitude);
+          from->_limiter = limiter;
+        }
+        if (artificialCost - magnitude < to->getRadius()) {
+          to->setRadius(artificialCost - magnitude);
+          to->_limiter = limiter;
+        }
+
+        if (shouldBeConnected) {
+          return(NULL);
+        }
+        break;
+      }
+    }
+  }
+
+  if (currentPass > 0) {
+    if (currentPass < passes) { // Not fully connected, roll back the last change
+      if (planningType == sim_holonomicpathplanning_xyg) {
+        pos -= delta_p;
+        pos(2) = 0.0;
+        orient *= _gammaAxisRotation * C4Vector(C3Vector(0.0f, 0.0f, -delta_p(2))) * _gammaAxisRotationInv;
+      } else if (planningType == sim_holonomicpathplanning_xyz ||
+                 planningType == sim_holonomicpathplanning_xyzabg) {
+        pos -= delta_p;
+        orient *= delta_q.getInverse();
+      }
+    }
+    extended->setAllValues(pos, orient);
+    artificialCost *= currentPass / (float)passes;
+    return extended;
+  }
+  return(NULL);
+  */
+
+int LazyRRGstar::getVector(LazyRRGstarNode* fromPoint, LazyRRGstarNode* toPoint, float vect[7], float e, float& artificialLength, bool dontDivide) {
 	// if direction constraints are not respected, return value is -1 and vect does not contain anything
 	// Otherwise return value is the number of times we have to add 'vect' to 'fromPoint' to reach 'toPoint'
 	int retVal = -1;
@@ -876,7 +910,7 @@ int HolonomicRRT::getVector(HolonomicRRTNode* fromPoint, HolonomicRRTNode* toPoi
 	return(retVal);
 }
 
-bool HolonomicRRT::addVector(C3Vector& pos, C4Vector& orient, float vect[7]) {
+bool LazyRRGstar::addVector(C3Vector& pos, C4Vector& orient, float vect[7]) {
 	// return value true means values are not forbidden!
 	float auxVect[7];
 	if (planningType == sim_holonomicpathplanning_xy) {
@@ -952,7 +986,7 @@ bool HolonomicRRT::addVector(C3Vector& pos, C4Vector& orient, float vect[7]) {
 	return(!areSomeValuesForbidden(auxVect));
 }
 
-int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
+int LazyRRGstar::smoothFoundPath(int steps, int maxTimePerPass) {
   // step specifies the number of passes (each pass is composed by a calculated sub-pass, and some random sub-pass)
   // We first copy foundPath:
   if (steps < 2)
@@ -984,8 +1018,8 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
       return(-1); // we are not yet finished, but we did enough for the time we had
     numberOfRandomConnectionTriesLeft_forSteppedSmoothing--;
     int lowIndex, highIndex;
-    HolonomicRRTNode* startP;
-    HolonomicRRTNode* endP;
+    LazyRRGstarNode* startP;
+    LazyRRGstarNode* endP;
     for (int randomPass = 0; randomPass < 5; randomPass++) {
       // If randomPass==0, the pass is not random, i.e. the low and high indices are calculated
       startP = NULL; // added on 2010/09/09
@@ -1006,8 +1040,8 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
           highIndex--;
         if (foundPathSameStraightLineID_forSteppedSmoothing[lowIndex] != foundPathSameStraightLineID_forSteppedSmoothing[highIndex]) {
           // otherwise this pass is skipped!
-          startP = static_cast<HolonomicRRTNode*>(foundPath[lowIndex]);
-          endP = static_cast<HolonomicRRTNode*>(foundPath[highIndex]);
+          startP = static_cast<LazyRRGstarNode*>(foundPath[lowIndex]);
+          endP = static_cast<LazyRRGstarNode*>(foundPath[highIndex]);
         }
       } else {
         // We randomly chose lowIndex and highIndex!
@@ -1018,8 +1052,8 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
           if ( (ra != rb) && (abs(ra - rb) > 1) && (foundPathSameStraightLineID_forSteppedSmoothing[ra] != foundPathSameStraightLineID_forSteppedSmoothing[rb]) ) {
             lowIndex = SIM_MIN(ra, rb);
             highIndex = SIM_MAX(ra, rb);
-            startP = static_cast<HolonomicRRTNode*>(foundPath[lowIndex]);
-            endP = static_cast<HolonomicRRTNode*>(foundPath[highIndex]);
+            startP = static_cast<LazyRRGstarNode*>(foundPath[lowIndex]);
+            endP = static_cast<LazyRRGstarNode*>(foundPath[highIndex]);
             break;
           }
         }
@@ -1068,7 +1102,7 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
 
             for (int currentPass = 0; currentPass < passes - 1; currentPass++) {
               addVector(pos, orient, vect);
-              HolonomicRRTNode* it = endP->copyYourself(); // just to have the right size!
+              LazyRRGstarNode* it = endP->copyYourself(); // just to have the right size!
               it->setAllValues(pos, orient);
               foundPath[lowIndex + 1 + currentPass] = it;
               foundPathSameStraightLineID_forSteppedSmoothing[lowIndex + 1 + currentPass] = sameStraightLineNextID_forSteppedSmoothing;
@@ -1082,12 +1116,12 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
   return(0); // will never pass here!
 }
 
-void HolonomicRRT::getPathData(std::vector<float>& data) {
+void LazyRRGstar::getPathData(std::vector<float>& data) {
   data.clear();
   if (invalidData)
     return;
   for (int i = 0; i < int(foundPath.size()); i++) {
-    HolonomicRRTNode* theNode = static_cast<HolonomicRRTNode*>(foundPath[i]);
+    LazyRRGstarNode* theNode = static_cast<LazyRRGstarNode*>(foundPath[i]);
     C3Vector p;
     C4Vector o;
     theNode->getAllValues(p, o);
@@ -1104,7 +1138,7 @@ void HolonomicRRT::getPathData(std::vector<float>& data) {
   }
 }
 
-bool HolonomicRRT::areDirectionConstraintsRespected(float vect[7]) {
+bool LazyRRGstar::areDirectionConstraintsRespected(float vect[7]) {
 	if (planningType == sim_holonomicpathplanning_xy) {
 		if (!_directionConstraintsOn)
 			return(true);
@@ -1214,13 +1248,13 @@ bool HolonomicRRT::areDirectionConstraintsRespected(float vect[7]) {
 	return(true);
 }
 
-bool HolonomicRRT::areSomeValuesForbidden(C7Vector configuration) {
+bool LazyRRGstar::areSomeValuesForbidden(C7Vector configuration) {
   float values[7];
   configuration.getInternalData(values);
   return areSomeValuesForbidden(values);
 }
 
-bool HolonomicRRT::areSomeValuesForbidden(float values[7]) {
+bool LazyRRGstar::areSomeValuesForbidden(float values[7]) {
 	float gamma = 0.0f;
   if (planningType == sim_holonomicpathplanning_xy) {
     if ((values[0] < _searchMinVal[0]) || (values[0] > _searchMinVal[0] + _searchRange[0]))
@@ -1294,7 +1328,7 @@ bool HolonomicRRT::areSomeValuesForbidden(float values[7]) {
   return(gamma > (_searchMinVal[3] + _searchRange[3]));
 }
 
-bool HolonomicRRT::doCollide(float* dist) {
+bool LazyRRGstar::doCollide(float* dist) {
   // dist can be NULL. Dist returns the actual distance only when return value is true!! otherwise it is SIM_MAX_FLOAT!!
   if (dist != NULL)
     dist[0] = SIM_MAX_FLOAT;

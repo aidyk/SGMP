@@ -25,3 +25,18 @@ void StateSpace::setAllValues(float *v) {
 	}
 }
 
+void StateSpace::getOrientation(C4Vector& q) {
+  assert(getSize() >= 7);
+
+  for (int i = 0; i < 4; i++) {
+    q(i) = _values[i + getSize() - 4];
+  }
+}
+
+void StateSpace::setOrientation(C4Vector* q) {
+  assert(getSize() >= 7);
+
+  for (int i = 0; i < 4; i++) {
+    _values[i + getSize() - 4] = (*q)(i);
+  }
+}
