@@ -121,6 +121,10 @@ LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
   _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
   _best_cost = SIM_MAX_FLOAT;
 
+  _collision_detection_count = 0;
+  _dynamic_decrease_count = 0;
+  _dynamic_increase_count = 0;
+
   buffer[0] = -1; // What the hell is this?
   invalidData = false;
 }
@@ -167,6 +171,16 @@ float LazyRRGstar::distance(LazyRRGstarNode* a, LazyRRGstarNode* b) {
     vect[2] = a->values[2] - b->values[2];
 
     dist = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
+
+  } else if (planningType == sim_holonomicpathplanning_xyg) {
+    float vect[3];
+    vect[0] = a->values[0] - b->values[0];
+    vect[1] = a->values[1] - b->values[1];
+    vect[2] = CPathPlanningInterface::getNormalizedAngle(a->values[2] - b->values[2]);
+    vect[2] *= angularCoeff;
+
+    dist = vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2];
+
   } else if (planningType == sim_holonomicpathplanning_xyzabg) {
     float vect[7];
     vect[0] = a->values[0] - b->values[0];
@@ -189,7 +203,8 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 
   if (fromTheStart) {
     if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
-      for (int i = 1; i < int(cont.size()); i++) {
+      for (int i = 0; i < int(cont.size()); i++) {
+        if (cont[i]->pred == NULL) continue;
         C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
         C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
         start = _startDummyCTM * start;
@@ -216,6 +231,7 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 
     } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
       for (int i = 0; i < int(cont.size()); i++) {
+        if (cont[i]->pred == NULL) continue;
         C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
         C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
         start = _startDummyCTM * start;
@@ -228,6 +244,7 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
       }
     }
   } else { // !fromTheStart
+    /*
     if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
       for (int i = 0; i < int(cont.size()); i++) {
         C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
@@ -239,7 +256,6 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
         goal.copyTo(d + 3);
         for (int j = 0; j < 6; j++)
           data.push_back(d[j]);
-        /*
         for (int j = 0; j < it->_nodes.size(); j++) {
           LazyRRGstarNode* jt = it->_nodes[j].node();
           if (jt == it->pred) continue;
@@ -254,9 +270,7 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
           for (int k = 0; k < 6; k++)
             data.push_back(d[k]);
         }
-        */
-      }
-    }
+    */
   }
 }
 
@@ -288,48 +302,44 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
   while (_simGetTimeDiffInMs(initTime) < maxTimePerPass) {
     randNode->reSample(planningType, _searchMinVal, _searchRange);
 
-    if (!isFree(randNode, startDummy)) continue;
-
     LazyRRGstarNode* closest = _nn->nearest(randNode);
-    float artificialCost, cArtificialCost;
-    if (closest == NULL) continue;
+    float artificialCost; // cArtificialCost = 0.0;
+    assert(closest != NULL); // Impossible!
 
     if (distance(randNode, closest) > _ballRadiusConst * _maxDistance) {
       randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
     }
 
-    /*
-    LazyRRGstarNode* extended = extend(closest, randNode, true, startDummy, cArtificialCost);
-    if (extended == NULL) continue;
-    */
-    LazyRRGstarNode* extended = lazyExtend(closest, randNode, true, startDummy, cArtificialCost);
+    if (!isFree(randNode, startDummy)) continue;
 
-#ifdef PRESORT
-    vector<pair<float, LazyRRGstarNode*> > associated_neighbors;
-    associated_neighbors.push_back(pair<float, LazyRRGstarNode*>(closest->getCost() + cArtificialCost, closest));
-#endif
+    LazyRRGstarNode* extended = randNode->copyYourself(); // Hm...
 
     std::vector<LazyRRGstarNode*> neighbors;
-    _nn->nearestR(extended, getNearNeighborRadius(), neighbors);
+    _nn->nearestR(extended, fmin(getNearNeighborRadius(), _maxDistance), neighbors);
     _nn->add(extended);
-    extended->addNode(closest, cArtificialCost);
-    closest->addNode(extended, cArtificialCost);
 
+// <LazyChooseParent
     LazyRRGstarNode* dummy;
-    for (int i = 0; i < neighbors.size(); i++) if (neighbors[i] != closest) {
-      if (neighbors[i] == _goal_node)
-        std::swap(neighbors[i], neighbors[neighbors.size() - 1]);
+    for (unsigned int i = 0; i < neighbors.size(); i++) {
       dummy = lazyExtend(extended, neighbors[i], true, startDummy, artificialCost);
+      // dummy ignored
 
       extended->addNode(neighbors[i], artificialCost);
       neighbors[i]->addNode(extended, artificialCost);
 
-#ifdef PRESORT
-      associated_neighbors.push_back(pair<float, LazyRRGstarNode*>(neighbors[i]->getCost() + artificialCost, neighbors[i]));
-#endif
+      // ChoosParent
+      if (neighbors[i]->getCost() + artificialCost < extended->getCost()) {
+        extended->pred = neighbors[i];
+        extended->setCost(neighbors[i]->getCost() + artificialCost);
+      }
     }
-    DynamicDecrease(extended); // Similar to UpdateChildren
 
+    if (extended->pred != NULL) { // Update children infomation later.
+      extended->pred->addChild(extended);
+    }
+
+// >
+    DynamicDecrease(extended); // Similar to UpdateChildren
     DynamicShortestPathUpdate(startDummy); // LazyUpdate including DynamicIncrease
   }
   delete randNode;
@@ -342,35 +352,6 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
   return(foundAPath);
 }
 
-/*
-void LazyRRGstar::DynamicShortestPathUpdate(LazyRRGstarNode *node, vector<pair<float, LazyRRGstarNode *> > &associated_neighbors) {
-#ifdef PRESORT
-  // increasing-order in terms of v.cost + d(v, w)
-  sort(associated_neighbors.begin(), associated_neighbors.end());
-  for (int i = 0; i < associated_neighbors.size(); i++) {
-    LazyRRGstarNode *neighbor = associated_neighbors[i].second;
-    float new_cost = associated_neighbors[i].first;
-    if (node->getCost() < new_cost) {
-      node->setCost(new_cost);
-      node->pred = neighbor;
-    }
-    float delta = neighbor->getCost() - (node->getCost() + new_cost - neighbor->getCost());
-    if (delta < 0) {
-      neighbor->setCost(node->getCost() + new_cost - neighbor->getCost());
-      neighbor->pred = node;
-    }
-  }
-#else
-#endif
-
-  LazyRRGstarNode *tracer = _goal_node;
-  vector<LazyRRGstarNode*> solution_path;
-  if (_goal_node->getCost() < _best_cost) {
-
-  }
-}
-*/
-
 void LazyRRGstar::DynamicShortestPathUpdate(CDummyDummy *startDummy) {
   LazyRRGstarNode *tracer = _goal_node;
   vector<LazyRRGstarNode*> solution_path;
@@ -379,93 +360,208 @@ void LazyRRGstar::DynamicShortestPathUpdate(CDummyDummy *startDummy) {
   // Cutting point priority? from start or goal?
   // From start is more plausible, stable and would be faster!
 
-  while (tracer->pred != NULL) {
-    solution_path.push_back(tracer);
-    tracer = tracer->pred;
-  }
+  while (true) {
+    int i;
+    LazyRRGstarNode *from, *to;
 
-  for (int i = solution_path.size() - 1; i >= 1; i--) {
-    LazyRRGstarNode* from = solution_path[i];
-    LazyRRGstarNode* to = solution_path[i- 1];
-
-    float artificialCost;
-    LazyRRGstarNode* dummy = extend(from, to, true, startDummy, artificialCost);
-    if (!dummy) { // collision found
-      // Remove invalid edge and handle other things to maintain the shortestpath tree.
-      from->removeNode(to);
-      to->removeNode(from);
-      // needless to say 'to->pred == from'
-      DynamicDelete(from, to);
+    tracer = _goal_node;
+    solution_path.clear();
+    while (tracer != NULL) {
+      solution_path.push_back(tracer);
+      tracer = tracer->pred;
     }
-  }
-}
 
-// Pre-condition :
-void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
-  typedef pair<float, LazyRRGstarNode*> weight_node;
-  priority_queue<weight_node> M;
-  priority_queue<weight_node> Q;
-  /*
-  to->setCost(SIM_MAX_FLOAT);
-  to->pred = NULL;
-  */
+    for (i = solution_path.size() - 1; i >= 1; i--) {
+      from = solution_path[i];
+      to = solution_path[i- 1];
 
-  // Color 0 : white, 1 : pink, 2 : red
-
-  M.push(weight_node(to->getCost(), to));
-  while (!M.empty()) {
-    weight_node top = M.top();
-    M.pop();
-
-    LazyRRGstarNode *node = top.second;
-    for (int i = 0; i < node->edges().size(); i++) {
-      LazyRRGstarNode *adj = node->edges()[i].node();
-      float cost = adj->getCost();
-      if (adj->getCost() + cost == top.first && adj->color != 2) {
-        // would really rarely happens.
-        node->pred = adj;
-        node->color = 1;
-      } else {
-        node->color = 2;
-
-        for (int i = 0; i < node->edges().size(); i++) {
-          LazyRRGstarNode *child = node->edges()[i].node();
-        }
+      float artificialCost;
+      LazyRRGstarNode* dummy = extend(from, to, true, startDummy, artificialCost);
+      if (dummy == NULL) { // collision found
+        // Remove invalid edge and handle other things to maintain the shortestpath tree.
+        from->removeNode(to);
+        from->removeChild(to);
+        to->pred = NULL;
+        to->removeNode(from);
+        DynamicIncrease(from, to);
+        break;
       }
     }
+
+    if (i == 0) { // If there is no collision along the solution path.
+      if (_goal_node->getCost() < _best_cost)
+        printf("%f -> %f\n", _best_cost, _goal_node->getCost());
+      _best_cost = std::min(_best_cost, _goal_node->getCost());
+      break;
+    } else if (to->pred == NULL) { // We couldn't connect 'something from root' - to.
+      // There is no way to get a solution now.
+      // Need more samples, drop by next time!
+      // ToDo: is it right?
+      break;
+    }
   }
 }
 
-// Pre-condition : to->pred == from
+// Pre-condition : Deprecated, Use DynamicIncrease instead.
 void LazyRRGstar::DynamicDelete(LazyRRGstarNode *from, LazyRRGstarNode *to) {
 }
 
-// Pre-condition : node has its own closeset parent node, and to be updated to find
-// better parent. It propagtates cost changes downstream from the initial input node.
+// Pre-condition : A newly added node with uninitialized cost(max-value) connected
+// to its near-neighbors. Rewire-similar work is done here.
+// It propagtates cost changes downstream from the initial input node.
 void LazyRRGstar::DynamicDecrease(LazyRRGstarNode *node) {
   typedef pair<float, LazyRRGstarNode*> weight_node;
-  priority_queue<weight_node> pq;
-  pq.push(weight_node(node->getCost(), node));
+  priority_queue<weight_node> pq; // Like max-heap (by default)
 
+  _dynamic_decrease_count += 1;
+
+  pq.push(weight_node(-node->getCost(), node));
   while (!pq.empty()) {
     weight_node top = pq.top();
     pq.pop();
-    float cost = top.first;
+
+    float cost = -top.first; // Inverse the cost value for working as min-heap.
     LazyRRGstarNode* node = top.second;
 
     if (cost > node->getCost()) continue;
 
     std::vector<LazyRRGstarNode::Edge> &edges = node->edges();
-    for (int i = 0; i < edges.size(); i++) {
-      LazyRRGstarNode *adj = edges[i].node();
+    for (unsigned int i = 0; i < edges.size(); i++) { // Rewire-similar
+      LazyRRGstarNode *neighbor = edges[i].node();
       float c = edges[i].cost();
-      if (adj->getCost() > node->getCost() + c) {
-        adj->setCost(node->getCost() + c);
-        adj->pred = node;
-        pq.push(weight_node(adj->getCost(), adj));
+      if (neighbor->getCost() > node->getCost() + c) {
+        neighbor->setCost(node->getCost() + c);
+
+        if (neighbor->pred != NULL) {
+          neighbor->pred->removeChild((neighbor));
+        }
+        neighbor->pred = node;
+        node->addChild(neighbor);
+
+        pq.push(weight_node(-neighbor->getCost(), neighbor));
       }
     }
   }
+}
+
+// Invoked after weight of an edge (q, z) and D(z) are updated.
+void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
+  static int is_white = 0;
+  // A color code of a node whose color value is
+  // equal to or less than 'is_white' means 'white', 'red' otherwise.
+  is_white += 1;
+
+  _dynamic_increase_count += 1;
+
+  std::vector<LazyRRGstarNode*> reds;
+  typedef pair<float, LazyRRGstarNode*> weight_node;
+  priority_queue<weight_node> pq; // Like max-heap (by default)
+  pq.push(weight_node(-to->getCost(), to));
+
+  // <Step 2. Coloring
+  while (!pq.empty()) {
+    weight_node top = pq.top();
+    pq.pop();
+
+    float cost = -top.first;
+    LazyRRGstarNode* node = top.second;
+
+    if (cost > node->getCost()) continue; // Instead of heap_improve
+
+    // If there exists a non-red neighbor q of z such that D(q) + w_(q,z) = D(z)
+    // set pink (Don't care at this time)
+    // otherwise, set red and enqueue all the children of z
+
+    bool pink_flag = false;
+    std::vector<LazyRRGstarNode::Edge> &edges = node->edges();
+    for (unsigned int i = 0; i < edges.size(); i++) {
+      LazyRRGstarNode *neighbor = edges[i].node();
+      float c = edges[i].cost();
+
+      if (neighbor->color != is_white + 1 && neighbor->getCost() + c == cost) {
+        // Actually, '<' should not be happened all the time.
+        // and even '==' would very rarely occur, but theoretically possible.
+        // Set pink
+        pink_flag = true;
+
+        if (node->pred != NULL) {
+          node->pred->removeChild(node);
+        }
+        node->pred = neighbor;
+        neighbor->addChild(node);
+      }
+    }
+    if (pink_flag) continue;
+
+    node->color = is_white + 1; // Set 'red'
+    reds.push_back(node);
+    std::vector<LazyRRGstarNode*> &children = node->children();
+    for (unsigned int i = 0; i < children.size(); i++) {
+      LazyRRGstarNode *child = children[i];
+      pq.push(weight_node(-child->getCost(), child));
+    }
+  }
+  // >
+
+  // <Step 3-a. Find best non-red parent for each red node.
+  for (unsigned int i = 0; i < reds.size(); i++) {
+    std::vector<LazyRRGstarNode::Edge> &edges = reds[i]->edges();
+
+    // Initialize cost : Need to be verified
+    reds[i]->setCost(SIM_MAX_FLOAT);
+    if (reds[i]->pred != NULL) {
+      reds[i]->pred->removeChild(reds[i]);
+      reds[i]->pred = NULL;
+    }
+
+    for (unsigned int j = 0; j < edges.size(); j++) {
+      LazyRRGstarNode *neighbor = edges[j].node();
+
+      if (neighbor->color == is_white + 1) continue; // If red, then skip.
+      if (reds[i]->getCost() > neighbor->getCost() + edges[j].cost()) {
+        reds[i]->setCost(neighbor->getCost() + edges[j].cost());
+        reds[i]->pred = neighbor;
+      }
+    }
+    if (reds[i]->pred != NULL) {
+      (reds[i]->pred)->addChild(reds[i]);
+    }
+    // Need to be verified.
+    pq.push(weight_node(-reds[i]->getCost(), reds[i]));
+  }
+  // >
+
+  // <Step 3-b. Propagate the changes; Check a 'red' node can be a better parent node for its neighbors.
+  while (!pq.empty()) {
+    weight_node top = pq.top();
+    pq.pop();
+
+    float cost = -top.first;
+    LazyRRGstarNode* node = top.second;
+
+    if (node->getCost() < cost) continue; // Rejected by delayed priority update.
+
+    std::vector<LazyRRGstarNode::Edge> &edges = node->edges();
+    for (unsigned int i = 0; i < edges.size(); i++) {
+      LazyRRGstarNode *neighbor = edges[i].node();
+      if (neighbor->color != is_white + 1) continue; // If not red, then skip.
+
+      if (cost + edges[i].cost() < neighbor->getCost()) {
+        neighbor->setCost(cost + edges[i].cost());
+        if (neighbor->pred != NULL) {
+          neighbor->pred->removeChild(neighbor);
+        }
+        neighbor->pred = node;
+        node->addChild(neighbor);
+        pq.push(weight_node(-neighbor->getCost(), neighbor));
+      }
+    }
+  }
+  // >
+
+  // The end!
+  // Restoring the original white color for all the red vertices will be automatically done by
+  // increasing is_white variable.
 }
 
 // Return best solution path in the current roadmap using traditional A* algorithm.
@@ -482,7 +578,7 @@ float LazyRRGstar::getBestSolutionPath(LazyRRGstarNode* goal_node) {
     LazyRRGstarNode* top = pq.top();
     pq.pop();
 
-    for (int i = 0; i < top->_edges.size(); i++) {
+    for (unsigned int i = 0; i < top->_edges.size(); i++) {
       LazyRRGstarNode::Edge &edge = top->_edges[i];
 
       float dist = edge.cost();
@@ -527,22 +623,37 @@ bool LazyRRGstar::gotPotential(LazyRRGstarNode* it) {
 }
 
 bool LazyRRGstar::setPartialPath() {
-  vector<LazyRRGstarNode*> path;
-
-  printf("%d\n", _nn->size());
+  printf("%u\n", _nn->size());
 
   vector<LazyRRGstarNode*> nodes;
   _nn->list(nodes);
 
   int sum_degree = 0;
-  for (int i = 0; i < nodes.size(); i++) {
+  for (unsigned int i = 0; i < nodes.size(); i++) {
     sum_degree += nodes[i]->_edges.size();
   }
 
   printf("Avg. Degree : %f\n", sum_degree / (double)nodes.size());
+  printf("DD : %d // DI : %d\n", _dynamic_decrease_count, _dynamic_increase_count);
+  printf("Final solution cost : %f\n", _best_cost);
+  printf("Collision Detection : %d\n", _collision_detection_count);
 
-  if (getBestSolutionPath(_goal_node) == 0.0)
+  /*
+  if (false && getBestSolutionPath(_goal_node) == 0.0) {
+    printf("False\n");
     return false;
+  }*/
+
+  // Extract actual result solution.
+  /*
+  LazyRRGstarNode* it = _goal_node;
+  while (it != NULL) {
+    printf("%f:%f:%f / %d\n", it->values[0], it->values[1], it->values[2], it->color);
+    foundPath.insert(foundPath.begin(), it->copyYourself());
+    it = static_cast<LazyRRGstarNode*>(it->pred);
+  }
+  */
+
   return true;
 }
 
@@ -634,8 +745,8 @@ bool LazyRRGstar::isFree(LazyRRGstarNode* node, CDummyDummy* dummy) {
   C7Vector tmpTr(_startDummyLTM * transf);
   _simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
   if (doCollide(NULL)) // Collision Check
-    return true;
-  return false;
+    return false;
+  return true;
 }
 
   /*
@@ -1329,6 +1440,7 @@ bool LazyRRGstar::areSomeValuesForbidden(float values[7]) {
 }
 
 bool LazyRRGstar::doCollide(float* dist) {
+  _collision_detection_count += 1;
   // dist can be NULL. Dist returns the actual distance only when return value is true!! otherwise it is SIM_MAX_FLOAT!!
   if (dist != NULL)
     dist[0] = SIM_MAX_FLOAT;

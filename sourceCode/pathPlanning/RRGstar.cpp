@@ -117,6 +117,8 @@ RRGstar::RRGstar(int theStartDummyID, int theGoalDummyID,
   _nn->add(_start_node);
   _nn->add(_goal_node);
 
+  _collision_detection_count = 0;
+
   // Set ballRadiusMax and ballRadiusConst to maximum extent
   _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
 
@@ -299,7 +301,7 @@ int RRGstar::searchPath(int maxTimePerPass) {
     if (extended == NULL) continue;
 
     std::vector<RRGstarNode*> neighbors;
-    _nn->nearestR(extended, getNearNeighborRadius(), neighbors);
+    _nn->nearestR(extended, fmin(getNearNeighborRadius(), _maxDistance), neighbors);
     _nn->add(extended);
     extended->addNode(closest, cArtificialCost);
     closest->addNode(extended, cArtificialCost);
@@ -399,9 +401,11 @@ bool RRGstar::setPartialPath() {
   }
 
   printf("Avg. Degree : %f\n", sum_degree / (double)nodes.size());
+  printf("CD : %d\n", _collision_detection_count);
 
-  if (getBestSolutionPath(path, _goal_node) == 0.0)
-    return false;
+  float result = getBestSolutionPath(path, _goal_node);
+  printf("Final solution cost : %f\n", _goal_node->d);
+
   return true;
 }
 
@@ -1092,6 +1096,7 @@ bool RRGstar::areSomeValuesForbidden(float values[7]) {
 }
 
 bool RRGstar::doCollide(float* dist) {
+  _collision_detection_count += 1;
   // dist can be NULL. Dist returns the actual distance only when return value is true!! otherwise it is SIM_MAX_FLOAT!!
   if (dist != NULL)
     dist[0] = SIM_MAX_FLOAT;

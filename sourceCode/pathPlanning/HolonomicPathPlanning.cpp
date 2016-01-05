@@ -44,6 +44,7 @@
 #include "HolonomicRRT.h"
 #include "HolonomicBiRRT.h"
 #include "HolonomicRRTstar.h"
+#include "LazyRRGstar.h"
 #include "RRGstar.h"
 #include "HolonomicPathPlanning.h"
 #include "pathPlanningInterface.h"
@@ -82,7 +83,7 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
                                          theSearchMinVal, theSearchRange,
                                          theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
     ptrPlanner = rrt;
-    printf("%s\n", "HolonomicRRT loaded");
+    printf("\n%s\n", "HolonomicRRT loaded");
   } else if (!strcmp(planner_type, "BiRRT")) { // BiRRT(Bi-directional RRT or RRT-connect)
     HolonomicBiRRT* birrt = new HolonomicBiRRT(theStartDummyID, theGoalDummyID,
                                                theRobotCollectionID, theObstacleCollectionID, ikGroupID,
@@ -96,7 +97,7 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
     }
 */
     ptrPlanner = birrt;
-    printf("%s\n", "HolonomicBiRRT loaded");
+    printf("\n%s\n", "HolonomicBiRRT loaded");
   } else if (!strcmp(planner_type, "RRT*")) { // RRT*
     HolonomicRRTstar* rrt_star = new HolonomicRRTstar(theStartDummyID, theGoalDummyID,
                                                       theRobotCollectionID, theObstacleCollectionID, ikGroupID,
@@ -105,7 +106,7 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
                                                       theSearchMinVal, theSearchRange,
                                                       theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
     ptrPlanner = rrt_star;
-    printf("%s\n", "HolonomicRRT* loaded");
+    printf("\n%s\n", "HolonomicRRT* loaded");
   } else if (!strcmp(planner_type, "RRG*")) { // RRG*
     RRGstar* rrg_star = new RRGstar(theStartDummyID, theGoalDummyID,
                                     theRobotCollectionID, theObstacleCollectionID, ikGroupID,
@@ -115,7 +116,17 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
                                     theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
 
     ptrPlanner = rrg_star;
-    printf("%s\n", "HolonomicRRG* loaded");
+    printf("\n%s\n", "HolonomicRRG* loaded");
+  } else if (!strcmp(planner_type, "DynamicRRG*")) { // RRG*
+    LazyRRGstar* lazy_rrg_star = new LazyRRGstar(theStartDummyID, theGoalDummyID,
+                                                 theRobotCollectionID, theObstacleCollectionID, ikGroupID,
+                                                 thePlanningType, theAngularCoeff,
+                                                 theStepSize,
+                                                 theSearchMinVal, theSearchRange,
+                                                 theDirectionConstraints, clearanceAndMaxDistance, gammaAxis);
+
+    ptrPlanner = lazy_rrg_star;
+    printf("\n%s\n", "Dynamic RRG* loaded");
   } else {
     fprintf(stderr, "%s\n", "Undefined planner type");
     return;

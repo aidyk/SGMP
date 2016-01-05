@@ -117,6 +117,10 @@ private:
   std::vector<double> _collisionCache;
   boost::shared_ptr<ompl::NearestNeighborsLinear<HolonomicRRTstarNode*> > _nn;
 
+  // <For evaluation
+  int _collision_detection_count;
+  // >
+
   // <RRTstar variables
   float _ballRadiusConst;
   float _ballRadiusMax;

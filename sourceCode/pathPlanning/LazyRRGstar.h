@@ -55,9 +55,9 @@
 #include "7Vector.h"
 
 #define PROPOSED
-#define PRESORT
+// #define PRESORT
 
-using namespace std;
+// using namespace std;
 
 class LazyRRGstar : public CHolonomicPathPlanning
 {
@@ -146,6 +146,12 @@ private:
   LazyRRGstarNode* _start_node;
   LazyRRGstarNode* _goal_node;
   float _best_cost;
+
+  // <For evaluation
+  int _collision_detection_count;
+  int _dynamic_increase_count;
+  int _dynamic_decrease_count; //
+  // >
 
   int numberOfRandomConnectionTries_forSteppedSmoothing;
   int numberOfRandomConnectionTriesLeft_forSteppedSmoothing;

@@ -125,6 +125,10 @@ private:
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
   boost::shared_ptr<ompl::NearestNeighborsLinear<RRGstarNode*> > _nn;
 
+  // <For evaluation
+  float _collision_detection_count;
+  // >
+
   // <RRG controllable parameters
   float _ballRadiusConst;
   float _ballRadiusMax;

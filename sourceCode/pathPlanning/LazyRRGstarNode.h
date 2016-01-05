@@ -49,6 +49,8 @@
 #include "7Vector.h"
 #include <vector>
 
+using namespace std;
+
 class LazyRRGstarNode : public CHolonomicPathNode
 {
 public:
@@ -75,9 +77,19 @@ public:
   void setCost(float cost) { _cost = cost; }
   float getCost() { return _cost; }
 
+  void addChild(LazyRRGstarNode* node) { _children.push_back(node); }
   void addNode(LazyRRGstarNode* node, float cost) { _edges.push_back(Edge(node, cost)); }
   void removeNode(LazyRRGstarNode* node);
+  void removeChild(LazyRRGstarNode* node) { // Can be optimized by storing index on child side.
+    for (unsigned int i = 0; i < _children.size(); i++) if (_children[i] == node){
+      std::swap(_children[i], _children.back());
+      _children.pop_back();
+      break;
+    }
+  }
+
   std::vector<Edge>& edges() { return _edges; }
+  std::vector<LazyRRGstarNode*>& children() { return _children; }
 
   bool isCollisionFree() { return !collision; }
   // >
@@ -87,7 +99,7 @@ public:
   // A*
   float f;
   float d;
-  int color;
+  int color; // Also for lazy RRG*
 
   bool collision;
 
@@ -96,6 +108,7 @@ public:
     return this->f > node.f;
   }
   std::vector<Edge> _edges;
+  std::vector<LazyRRGstarNode*> _children;
 
 private:
   float _cost;

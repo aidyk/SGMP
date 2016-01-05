@@ -116,6 +116,7 @@ HolonomicRRTstar::HolonomicRRTstar(int theStartDummyID, int theGoalDummyID,
   _nn->setDistanceFunction(boost::bind(&HolonomicRRTstar::distance, this, _1, _2));
   _nn->add(start_node);
 
+  _collision_detection_count = 0;
   _collisionCache.resize(64);
 
   // Set ballRadiusMax and ballRadiusConst to maximum extent
@@ -528,7 +529,9 @@ bool HolonomicRRTstar::setPartialPath() {
     it = static_cast<HolonomicRRTstarNode*>(it->parent);
   }
 
+  printf("Final solution cost : %f\n", (*from_goal)[0]->getCost());
   printf("# of nodes : %d\n", _nn->size());
+  printf("Collision Detection : %d\n", _collision_detection_count);
 
   return(true);
 }
@@ -1115,6 +1118,7 @@ bool HolonomicRRTstar::areSomeValuesForbidden(float values[7]) {
 }
 
 bool HolonomicRRTstar::doCollide(float* dist) {
+  _collision_detection_count += 1;
   // dist can be NULL. Dist returns the actual distance only when return value is true!! otherwise it is SIM_MAX_FLOAT!!
   if (dist != NULL)
     dist[0] = SIM_MAX_FLOAT;
