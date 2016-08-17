@@ -41,32 +41,27 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
-#pragma once
+#include "mpPhase2Node.h"
+#include "v_repLib.h"
 
-#include "HolonomicPathNode.h"
-#include "3Vector.h"
-#include "4Vector.h"
-#include "7Vector.h"
-#include <vector>
-
-class HolonomicPRMNode : public CHolonomicPathNode
+CmpPhase2Node::CmpPhase2Node(int jointCount,const float* _jointPositions,const C7Vector& _tipTransf)
 {
-	public:
-        HolonomicPRMNode(const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        HolonomicPRMNode(int theType,const C7Vector& conf,const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        HolonomicPRMNode(int theType,float searchMin[4],float searchRange[4],const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        virtual ~HolonomicPRMNode();
+	jointPositions=new float[jointCount];
+	tipTransf=_tipTransf;
+	for (int i=0;i<jointCount;i++)
+		jointPositions[i]=_jointPositions[i];
+	parentNode=NULL;
+}
 
-        virtual HolonomicPRMNode* copyYourself();
+CmpPhase2Node::~CmpPhase2Node()
+{
+	delete[] jointPositions;
+}
 
-				// <Set/Getters
-				void setCost(float cost) { _cost = cost; }
-				float getCost() { return _cost; }
 
-        void addNode(HolonomicPRMNode* node) { _nodes.push_back(node); }
-        void removeNode(HolonomicPRMNode* node);
-		// >
-	private:
-		float _cost;
-        std::vector<HolonomicPRMNode*> _nodes;
-};
+CmpPhase2Node* CmpPhase2Node::copyYourself(int jointCount)
+{
+	CmpPhase2Node* newNode=new CmpPhase2Node(jointCount,jointPositions,tipTransf);
+	return(newNode);
+}
+

@@ -41,11 +41,13 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
-#pragma once
+#ifndef LAZY_RRGSTAR_H_
+#define LAZY_RRGSTAR_H_
 
+// #include <ompl/datastructures/NearestNeighborsFLANN.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
+// #include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
 #include <ompl/datastructures/NearestNeighborsLinear.h>
-
 #include <vector>
 
 #include "HolonomicPathPlanning.h"
@@ -53,9 +55,6 @@
 #include "dummyClasses.h"
 #include "4Vector.h"
 #include "7Vector.h"
-
-#define PROPOSED
-// #define PRESORT
 
 // using namespace std;
 
@@ -72,13 +71,9 @@ public:
 
   // Following functions are inherited from CPathPlanning:
   int searchPath(int maxTimePerPass);
+  void getPathData(std::vector<float> &data);
   bool setPartialPath();
-  int smoothFoundPath(int steps,int maxTimePerPass);
-  void getPathData(std::vector<float>& data);
   void getSearchTreeData(std::vector<float>& data, bool fromStart);
-
-  void setAngularCoefficient(float coeff);
-  void setStepSize(float size);
 
   float getNearNeighborRadius(void);
 
@@ -94,15 +89,8 @@ public:
   float getBestSolutionPath(LazyRRGstarNode* goal_node);
 
 private:
-  bool doCollide(float* dist);
-
-  bool addVector(C3Vector& pos,C4Vector& orient,float vect[7]);
-  bool areDirectionConstraintsRespected(float vect[7]);
-  bool areSomeValuesForbidden(float values[7]);
-  bool areSomeValuesForbidden(C7Vector configuration);
-
   float distance(LazyRRGstarNode* a, LazyRRGstarNode* b);
-  int getVector(LazyRRGstarNode* fromPoint,LazyRRGstarNode* toPoint,float vect[7],float e,float& artificialLength,bool dontDivide);
+  // int getVector(LazyRRGstarNode* fromPoint,LazyRRGstarNode* toPoint,float vect[7],float e,float& artificialLength,bool dontDivide);
   std::vector<LazyRRGstarNode*> getNearNeighborNodes(std::vector<LazyRRGstarNode*>& nodes, LazyRRGstarNode* node, float radius);
   LazyRRGstarNode* extend(LazyRRGstarNode* from, LazyRRGstarNode* to,
                       bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost);
@@ -118,25 +106,10 @@ private:
 
   bool gotPotential(LazyRRGstarNode* it);
 
-  int startDummyID;
-  int goalDummyID;
-  int planningType;
-  float angularCoeff;
-  float stepSize;
-  float _searchMinVal[4];
-  float _searchRange[4];
-  int _directionConstraints[4];
-  bool _directionConstraintsOn;
+  // boost::shared_ptr<ompl::NearestNeighborsLinear<LazyRRGstarNode*> > _nn;
+  boost::shared_ptr<ompl::NearestNeighborsGNAT<LazyRRGstarNode*> > _nn;
 
-  C4Vector _gammaAxisRotation;
-  C4Vector _gammaAxisRotationInv;
-
-  C7Vector _startDummyCTM;
-  C7Vector _startDummyLTM;
-
-  std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
-  boost::shared_ptr<ompl::NearestNeighborsLinear<LazyRRGstarNode*> > _nn;
-
+  float _kConstant;
   // <RRG controllable parameters
   float _ballRadiusConst;
   float _ballRadiusMax;
@@ -148,13 +121,15 @@ private:
   float _best_cost;
 
   // <For evaluation
-  int _collision_detection_count;
+  int _skipped_collision_detection_count;
   int _dynamic_increase_count;
-  int _dynamic_decrease_count; //
-  // >
+  int _dynamic_decrease_count;
 
-  int numberOfRandomConnectionTries_forSteppedSmoothing;
-  int numberOfRandomConnectionTriesLeft_forSteppedSmoothing;
-  int sameStraightLineNextID_forSteppedSmoothing;
-  int nextIteration_forSteppedSmoothing;
+  int _remove_time;
+  int _collision_detection_time; // in ms
+  int _dynamic_increase_time;
+  int _dynamic_decrease_time;
+  int _near_neighbor_search_time;
+  // >
 };
+#endif //LAZY_RRGSTAR_H_

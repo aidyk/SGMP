@@ -48,6 +48,12 @@
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
 
+#define CONST_E 2.718281828
+
+//#define KNN
+#define TIME
+#define TIMELAPSE
+
 HolonomicRRTstar::HolonomicRRTstar(int theStartDummyID, int theGoalDummyID,
                                    int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
                                    int thePlanningType, float theAngularCoeff,
@@ -112,15 +118,23 @@ HolonomicRRTstar::HolonomicRRTstar(int theStartDummyID, int theGoalDummyID,
       _directionConstraintsOn = true;
   }
 
-  _nn.reset(new ompl::NearestNeighborsLinear<HolonomicRRTstarNode*>()); // Initialize NearestNeighbors structure
+  // _nn.reset(new ompl::NearestNeighborsLinear<HolonomicRRTstarNode*>()); // Initialize NearestNeighbors structure
+  _nn.reset(new ompl::NearestNeighborsGNAT<HolonomicRRTstarNode*>()); // Initialize NearestNeighbors structure
   _nn->setDistanceFunction(boost::bind(&HolonomicRRTstar::distance, this, _1, _2));
   _nn->add(start_node);
 
-  _collision_detection_count = 0;
+  _collision_detection_count = _collision_detection_time = _near_neighbor_search_time = 0;
   _collisionCache.resize(64);
 
   // Set ballRadiusMax and ballRadiusConst to maximum extent
   _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
+
+  if (planningType == sim_holonomicpathplanning_xyz) {
+    _kConstant = CONST_E + CONST_E / 3.0;
+  } else if (planningType == sim_holonomicpathplanning_xyzabg){
+    // _kConstant = CONST_E + CONST_E / 3.0;
+    _kConstant = CONST_E + CONST_E / 6.0;
+  }
 
   buffer[0] = -1; // What the hell is this?
   invalidData = false;
@@ -148,7 +162,15 @@ HolonomicRRTstar::~HolonomicRRTstar() {
 
 float HolonomicRRTstar::getNearNeighborRadius() {
   // return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + fromStart.size()) / (1.0 + fromStart.size()), 0.33));
-  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.33));
+  //if (planningType == sim_holonomicpathplanning_xyzabg) {
+  //  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.1666));
+  //} else {
+#ifdef KNN
+  return ceil(log(1.0 + _nn->size()) * _kConstant);
+#else
+    return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.3333));
+#endif
+  //}
 }
 
 float HolonomicRRTstar::distance(HolonomicRRTstarNode* a, HolonomicRRTstarNode* b) {
@@ -390,6 +412,8 @@ void HolonomicRRTstar::getSearchTreeData(std::vector<float>& data, bool fromTheS
 }
 
 int HolonomicRRTstar::searchPath(int maxTimePerPass) {
+  int passes = 0;
+  int break_point = 1000;
 #ifdef TIMELAPSE
   FILE *tfp = fopen("time_lapse.txt", "a");
 #endif
@@ -413,6 +437,7 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
 
   if (maxTimePerPass == 131183)
     return(61855195);
+  maxTimePerPass = 10000;
 
   int foundAPath = 0;
   int initTime = simGetSystemTimeInMs(-1);
@@ -420,7 +445,13 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
   while (_simGetTimeDiffInMs(initTime) < maxTimePerPass) {
     randNode->reSample(planningType, _searchMinVal, _searchRange);
 
+#ifdef TIME
+    int elapsed_time = simGetSystemTimeInMs(-1);
+#endif
     HolonomicRRTstarNode* closest = _nn->nearest(randNode);
+#ifdef TIME
+    _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
     float artificialCost, cArtificialCost;
     if (closest == NULL) continue;
 
@@ -438,7 +469,17 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
     extended->setCost(static_cast<HolonomicRRTstarNode*>(extended->parent)->getCost() + cArtificialCost);
 
     std::vector<HolonomicRRTstarNode*> neighbors;
+#ifdef TIME
+    elapsed_time = simGetSystemTimeInMs(-1);
+#endif
+#ifdef KNN
+    _nn->nearestK(extended, getNearNeighborRadius(), neighbors);
+#else
     _nn->nearestR(extended, fmin(getNearNeighborRadius(), _maxDistance), neighbors);
+#endif
+#ifdef TIME
+    _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
 
     if (_collisionCache.size() < neighbors.size()) { // Reallc the size of collision cache
       _collisionCache.resize(_collisionCache.size() * 2);
@@ -463,7 +504,13 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
         _collisionCache[i] = cArtificialCost;
       }
     }
+#ifdef TIME
+    elapsed_time = simGetSystemTimeInMs(-1);
+#endif
     _nn->add(extended);
+#ifdef TIME
+    _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
 
     // Add this node to the best new parent node
     static_cast<HolonomicRRTstarNode*>(extended->parent)->addChild(extended);
@@ -499,8 +546,21 @@ int HolonomicRRTstar::searchPath(int maxTimePerPass) {
         neighbors[i]->updateChildrenCosts(delta_cost);
       }
     }
+
+#ifdef TIMELAPSE
+    if (_simGetTimeDiffInMs(initTime) + passes >= break_point) {
+      float bc = static_cast<HolonomicRRTstarNode*>(fromGoal[0])->getCost();
+      fprintf(tfp, "%f\n", bc);
+      break_point += 1000;
+    }
+#endif
   }
   delete randNode;
+
+#ifdef TIMELAPSE
+  fprintf(tfp, "\n");
+  fclose(tfp);
+#endif
 
   // We restore the dummy local config and the constraints
   _simSetObjectLocalTransformation(startDummy, dumSavedConf.X.data, dumSavedConf.Q.data);
@@ -530,8 +590,23 @@ bool HolonomicRRTstar::setPartialPath() {
   }
 
   printf("Final solution cost : %f\n", (*from_goal)[0]->getCost());
-  printf("# of nodes : %d\n", _nn->size());
+  printf("# of nodes : %lu\n", _nn->size());
   printf("Collision Detection : %d\n", _collision_detection_count);
+
+  FILE *ofp = NULL;
+  ofp = fopen("RRTstar.log", "a");
+  if (ofp == NULL) {
+    fprintf(stderr, "File Open Error!\n");
+    exit(1);
+  }
+
+  fprintf(ofp, "%lu\t%f\t%d",
+          _nn->size(), (*from_goal)[0]->getCost(), _collision_detection_count);
+#ifdef TIME
+  fprintf(ofp, "\t%f\t%f\n",
+          _collision_detection_time / 1000.0f, _near_neighbor_search_time / 1000.0f);
+#endif
+  fclose(ofp);
 
   return(true);
 }
@@ -548,6 +623,10 @@ HolonomicRRTstarNode* HolonomicRRTstar::extend(HolonomicRRTstarNode* from, Holon
   float theVect[7] = {0.0, };
   int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
   int currentPass;
+
+#ifdef TIME
+  int elapsed_time = simGetSystemTimeInMs(-1);
+#endif
 
   C3Vector pos(extended->values);
   C4Vector orient(extended->values + 3);
@@ -575,6 +654,9 @@ HolonomicRRTstarNode* HolonomicRRTstar::extend(HolonomicRRTstarNode* from, Holon
     _simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
     if (doCollide(NULL)) { // Collision Check
       if (shouldBeConnected) {
+#ifdef TIME
+    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
         return(NULL);
       }
       break;
@@ -595,6 +677,9 @@ HolonomicRRTstarNode* HolonomicRRTstar::extend(HolonomicRRTstarNode* from, Holon
     }
     extended->setAllValues(pos, orient);
     artificialCost *= currentPass / (float)passes;
+#ifdef TIME
+    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
     return extended;
   }
   return(NULL);

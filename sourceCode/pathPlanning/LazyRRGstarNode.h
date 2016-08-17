@@ -87,11 +87,13 @@ public:
       break;
     }
   }
+  void updateWitness(float dist, LazyRRGstarNode* witness);
 
   std::vector<Edge>& edges() { return _edges; }
   std::vector<LazyRRGstarNode*>& children() { return _children; }
 
-  bool isCollisionFree() { return !collision; }
+  bool isCollisionFree() { return is_collision_free; }
+  void isCollisionFree(bool value) { is_collision_free = value; }
   // >
   // for shortestpath computation
   LazyRRGstarNode* pred;
@@ -101,7 +103,12 @@ public:
   float d;
   int color; // Also for lazy RRG*
 
-  bool collision;
+  bool is_collision_free; // It means a connection (parent -> this) is collision free.
+
+  // <Dynamic CSA
+  LazyRRGstarNode* witness;
+  float free_radius;
+  // >
 
   // Increasing order for priority queue
   bool operator < (const LazyRRGstarNode& node) const {

@@ -106,6 +106,7 @@ private:
   float _searchRange[4];
   int _directionConstraints[4];
   bool _directionConstraintsOn;
+  float _kConstant;
 
   C4Vector _gammaAxisRotation;
   C4Vector _gammaAxisRotationInv;
@@ -115,10 +116,13 @@ private:
 
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
   std::vector<double> _collisionCache;
-  boost::shared_ptr<ompl::NearestNeighborsLinear<HolonomicRRTstarNode*> > _nn;
+  // boost::shared_ptr<ompl::NearestNeighborsLinear<HolonomicRRTstarNode*> > _nn;
+  boost::shared_ptr<ompl::NearestNeighborsGNAT<HolonomicRRTstarNode*> > _nn;
 
   // <For evaluation
   int _collision_detection_count;
+  int _collision_detection_time;
+  int _near_neighbor_search_time;
   // >
 
   // <RRTstar variables

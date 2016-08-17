@@ -44,16 +44,83 @@
 #pragma once
 
 #include "7Vector.h"
+#include <vector>
 
-class CmpPhase2Node
+class Node
 {
 public:
-	CmpPhase2Node(int jointCount,const float* _jointPositions,const C7Vector& _tipTransf);
-	virtual ~CmpPhase2Node();
+  class Edge {
+  public:
+    Edge(Node* n, float c) {
+      _node = n; _cost = c;
+    }
+    Node* node() { return _node; }
+    float cost() { return _cost; }
+    void cost(float c) { _cost = c; }
+  private:
+    Node* _node;
+    float _cost;
+  };
 
-	CmpPhase2Node* copyYourself(int jointCount);
+public:
+    Node(int jointCount,const float* _jointPositions,const C7Vector& _tipTransf);
+    virtual ~Node();
 
-	float* jointPositions;
-	C7Vector tipTransf; // relative to base object!
-	CmpPhase2Node* parentNode;
+    Node* copyYourself(int jointCount);
+
+    float* jointPositions;
+    C7Vector tipTransf; // relative to base object!
+    Node* parent;
+    Node* parentNode;
+
+    // <Set/Getters
+    void setCost(float cost) { _cost = cost; }
+    float getCost() { return _cost; }
+
+    void addChild(Node* node) { _children.push_back(node); }
+    void addNode(Node* node, float cost) { _edges.push_back(Edge(node, cost)); }
+    void removeNode(Node* node);
+    void removeChild(Node* node) { // Can be optimized by storing index on child side.
+      for (unsigned int i = 0; i < _children.size(); i++) if (_children[i] == node){
+        std::swap(_children[i], _children.back());
+        _children.pop_back();
+        break;
+      }
+    }
+    void updateChildrenCosts(float delta_cost) {
+      for (int i = 0; i < int(_children.size()); i++) {
+        _children[i]->setCost(_children[i]->getCost() + delta_cost);
+        _children[i]->updateChildrenCosts(delta_cost);
+      }
+    }
+
+    void updateWitness(float dist, Node* witness);
+    void setAllValues(std::vector<float> joint, int jointCount) {
+      for (int i = 0; i < jointCount; i++) {
+        jointPositions[i] = joint[i];
+      }
+    }
+
+    std::vector<Edge>& edges() { return _edges; }
+    std::vector<Node*>& children() { return _children; }
+
+    bool isCollisionFree() { return is_collision_free; }
+    void isCollisionFree(bool value) { is_collision_free = value; }
+    // >
+    // for shortestpath computation
+    Node* pred;
+
+    bool is_collision_free; // It means a connection (parent -> this) is collision free.
+
+    // <Dynamic CSA
+    Node* witness;
+    float free_radius;
+    // >
+    int color;
+
+    std::vector<Edge> _edges;
+    std::vector<Node*> _children;
+
+  private:
+    float _cost;
 };

@@ -41,32 +41,49 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
-#pragma once
+#include "mpPhase1Node.h"
+#include "v_repLib.h"
 
-#include "HolonomicPathNode.h"
-#include "3Vector.h"
-#include "4Vector.h"
-#include "7Vector.h"
-#include <vector>
-
-class HolonomicPRMNode : public CHolonomicPathNode
+CmpPhase1Node::CmpPhase1Node(int jointCount,const float* _jointPositions,const C7Vector& _tipPose)
 {
-	public:
-        HolonomicPRMNode(const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        HolonomicPRMNode(int theType,const C7Vector& conf,const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        HolonomicPRMNode(int theType,float searchMin[4],float searchRange[4],const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        virtual ~HolonomicPRMNode();
+	jointPositions=new float[jointCount];
+// KEEP!!	neighbourIndices=new int[jointCount*2];
+	tipPose=_tipPose;
+	attributes=0;
+	for (int i=0;i<jointCount;i++)
+		jointPositions[i]=_jointPositions[i];
+// KEEP!!	for (int i=0;i<jointCount*2;i++)
+// KEEP!!		neighbourIndices[i]=-1;
+}
 
-        virtual HolonomicPRMNode* copyYourself();
+CmpPhase1Node::~CmpPhase1Node()
+{
+// KEEP!!	delete[] neighbourIndices;
+	delete[] jointPositions;
+}
 
-				// <Set/Getters
-				void setCost(float cost) { _cost = cost; }
-				float getCost() { return _cost; }
+CmpPhase1Node* CmpPhase1Node::copyYourself(int jointCount)
+{
+	CmpPhase1Node* newNode=new CmpPhase1Node(jointCount,jointPositions,tipPose);
+// KEEP!!	for (int i=0;i<jointCount*2;i++)
+// KEEP!!		newNode->neighbourIndices[i]=neighbourIndices[i];
+	newNode->attributes=attributes;
+	return(newNode);
+}
 
-        void addNode(HolonomicPRMNode* node) { _nodes.push_back(node); }
-        void removeNode(HolonomicPRMNode* node);
-		// >
-	private:
-		float _cost;
-        std::vector<HolonomicPRMNode*> _nodes;
-};
+/* KEEP!!
+void CmpPhase1Node::setNeighbours(int index,int theNeighbourIndex)
+{
+	neighbourIndices[index]=theNeighbourIndex;
+}
+*/
+
+/*
+void CmpPhase1Node::setColliding(bool colliding)
+{
+	if (colliding)
+		attributes&=254;
+	else
+		attributes|=1;
+}
+*/

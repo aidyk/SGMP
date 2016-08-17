@@ -419,6 +419,7 @@ int HolonomicRRT::searchPath(int maxTimePerPass) {
         it = static_cast<HolonomicRRTNode*>(it->parent);
       }
       foundAPath = true;
+      printf("path %lu\n", foundPath.size());
       break;
     }
   }
@@ -1084,6 +1085,7 @@ int HolonomicRRT::smoothFoundPath(int steps, int maxTimePerPass) {
 
 void HolonomicRRT::getPathData(std::vector<float>& data) {
   data.clear();
+  printf("RRT inv : %d %d\n", invalidData, foundPath.size());
   if (invalidData)
     return;
   for (int i = 0; i < int(foundPath.size()); i++) {

@@ -43,30 +43,17 @@
 
 #pragma once
 
-#include "HolonomicPathNode.h"
-#include "3Vector.h"
-#include "4Vector.h"
 #include "7Vector.h"
-#include <vector>
 
-class HolonomicPRMNode : public CHolonomicPathNode
+class CmpPhase2Node
 {
-	public:
-        HolonomicPRMNode(const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        HolonomicPRMNode(int theType,const C7Vector& conf,const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        HolonomicPRMNode(int theType,float searchMin[4],float searchRange[4],const C4Vector& rotAxisRot,const C4Vector& rotAxisRotInv);
-        virtual ~HolonomicPRMNode();
+public:
+	CmpPhase2Node(int jointCount,const float* _jointPositions,const C7Vector& _tipTransf);
+	virtual ~CmpPhase2Node();
 
-        virtual HolonomicPRMNode* copyYourself();
+	CmpPhase2Node* copyYourself(int jointCount);
 
-				// <Set/Getters
-				void setCost(float cost) { _cost = cost; }
-				float getCost() { return _cost; }
-
-        void addNode(HolonomicPRMNode* node) { _nodes.push_back(node); }
-        void removeNode(HolonomicPRMNode* node);
-		// >
-	private:
-		float _cost;
-        std::vector<HolonomicPRMNode*> _nodes;
+	float* jointPositions;
+	C7Vector tipTransf; // relative to base object!
+	CmpPhase2Node* parentNode;
 };

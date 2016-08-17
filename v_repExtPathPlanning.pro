@@ -47,6 +47,7 @@ TEMPLATE = lib
 DEFINES -= UNICODE
 
 CONFIG += shared
+LIBS += -L"/usr/local/lib" -lompl
 
 *-msvc* {
 	QMAKE_CXXFLAGS += -O2
@@ -99,7 +100,7 @@ INCLUDEPATH += "../programming/v_repMath"
 INCLUDEPATH += "../programming/include"
 INCLUDEPATH += "../programming/common"
 INCLUDEPATH += "/opt/local/include"
-INCLUDEPATH += "/Users/ai/Desktop/PB-RRT/ompl-1.0.0-Source/src"
+INCLUDEPATH += "../ompl-1.1.0-Source/src"
 
 HEADERS += ../v_rep/sourceCode/interfaces/pathPlanningInterface.h \
 	../v_rep/sourceCode/interfaces/dummyClasses.h \
@@ -110,7 +111,6 @@ HEADERS += ../v_rep/sourceCode/interfaces/pathPlanningInterface.h \
 	../programming/v_repMath/3X3Matrix.h \
 	../programming/v_repMath/4X4Matrix.h \
 	../programming/v_repMath/MyMath.h \
-	../ompl-1.0.0-Source/src/ompl/datastructures/NearestNeighborsGNAT.h \
     sourceCode/stateSpace/Real2DStateSpace.h \
     sourceCode/stateSpace/Real3DStateSpace.h \
     sourceCode/stateSpace/SE2StateSpace.h \

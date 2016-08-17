@@ -44,24 +44,44 @@
 #include "mpPhase2Node.h"
 #include "v_repLib.h"
 
-CmpPhase2Node::CmpPhase2Node(int jointCount,const float* _jointPositions,const C7Vector& _tipTransf)
+Node::Node(int jointCount,const float* _jointPositions,const C7Vector& _tipTransf)
 {
 	jointPositions=new float[jointCount];
 	tipTransf=_tipTransf;
 	for (int i=0;i<jointCount;i++)
 		jointPositions[i]=_jointPositions[i];
-	parentNode=NULL;
+    parent=NULL;
+    _cost = SIM_MAX_FLOAT;
+    color = 0; // White
+    pred = witness = NULL;
+    is_collision_free = false;
+    free_radius = 0.0f;
 }
 
-CmpPhase2Node::~CmpPhase2Node()
+Node::~Node()
 {
 	delete[] jointPositions;
 }
 
-
-CmpPhase2Node* CmpPhase2Node::copyYourself(int jointCount)
+Node* Node::copyYourself(int jointCount)
 {
-	CmpPhase2Node* newNode=new CmpPhase2Node(jointCount,jointPositions,tipTransf);
+    Node* newNode=new Node(jointCount,jointPositions,tipTransf);
 	return(newNode);
 }
 
+void Node::removeNode(Node *node) {
+  for (int i = 0; i < int(_edges.size()); i++) {
+    if (_edges[i].node() == node) { // If the order of nodes doesn't matter, it's faster than vector::erase()
+      std::swap(_edges[i], _edges.back());
+      _edges.pop_back();
+      break;
+    }
+  }
+}
+
+void Node::updateWitness(float dist, Node *node) {
+  if (witness == NULL || dist < free_radius) {
+    free_radius = dist;
+    witness = node;
+  }
+}

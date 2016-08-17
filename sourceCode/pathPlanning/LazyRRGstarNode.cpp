@@ -50,8 +50,9 @@ LazyRRGstarNode::LazyRRGstarNode(const C4Vector& rotAxisRot, const C4Vector& rot
   _cost = SIM_MAX_FLOAT;
   f = d = SIM_MAX_FLOAT;
   color = 0; // White
-  pred = NULL;
-  collision = 0;
+  pred = witness = NULL;
+  is_collision_free = false;
+  free_radius = 0.0f;
 }
 
 LazyRRGstarNode::LazyRRGstarNode(int theType, const C7Vector& conf, const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
@@ -59,8 +60,9 @@ LazyRRGstarNode::LazyRRGstarNode(int theType, const C7Vector& conf, const C4Vect
   _cost = SIM_MAX_FLOAT;
   f = d = SIM_MAX_FLOAT;
   color = 0;
-  pred = NULL;
-  collision = 0;
+  pred = witness = NULL;
+  is_collision_free = false;
+  free_radius = 0.0f;
 }
 
 LazyRRGstarNode::LazyRRGstarNode(int theType, float searchMin[4], float searchRange[4],
@@ -69,8 +71,9 @@ const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
   _cost = SIM_MAX_FLOAT;
   f = d = SIM_MAX_FLOAT;
   color = 0;
-  pred = NULL;
-  collision = 0;
+  pred = witness = NULL;
+  is_collision_free = false;
+  free_radius = 0.0f;
 }
 
 LazyRRGstarNode::~LazyRRGstarNode() {
@@ -95,3 +98,11 @@ void LazyRRGstarNode::removeNode(LazyRRGstarNode *node) {
     }
   }
 }
+
+void LazyRRGstarNode::updateWitness(float dist, LazyRRGstarNode *node) {
+  if (witness == NULL || dist < free_radius) {
+    free_radius = dist;
+    witness = node;
+  }
+}
+

@@ -41,7 +41,8 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
-#pragma once
+#ifndef HOLONOMIC_PATH_PLANNING_H_
+#define HOLONOMIC_PATH_PLANNING_H_
 
 #include "PathPlanning.h"
 #include "HolonomicPathNode.h"
@@ -53,58 +54,81 @@
 class CHolonomicPathPlanning : public CPathPlanning  
 {
 public:
-	CHolonomicPathPlanning() {};
-	CHolonomicPathPlanning(int theStartDummyID,int theGoalDummyID,
-							int theRobotCollectionID,int theObstacleCollectionID,int ikGroupID,
-							int thePlanningType,float theAngularCoeff,
-							float theStepSize,
-							const float theSearchMinVal[4],const float theSearchRange[4],
-							const int theDirectionConstraints[4],const float clearanceAndMaxDistance[2],const C3Vector& gammaAxis);
-	virtual ~CHolonomicPathPlanning();
+  CHolonomicPathPlanning() {};
+  CHolonomicPathPlanning(int theStartDummyID,int theGoalDummyID,
+                         int theRobotCollectionID,int theObstacleCollectionID,int ikGroupID,
+                         int thePlanningType,float theAngularCoeff,
+                         float theStepSize,
+                         const float theSearchMinVal[4],const float theSearchRange[4],
+  const int theDirectionConstraints[4],const float clearanceAndMaxDistance[2],const C3Vector& gammaAxis);
+  virtual ~CHolonomicPathPlanning();
 
-	// Following functions are inherited from CPathPlanning:
-	virtual int searchPath(int maxTimePerPass);
-    virtual void setGoalBias(float value);
-    virtual void setMaxDistance(float value);
-	virtual bool setPartialPath();
-	virtual int smoothFoundPath(int steps,int maxTimePerPass);
-	virtual void getPathData(std::vector<float>& data);
+  // Following functions are inherited from CPathPlanning:
+  virtual int searchPath(int maxTimePerPass);
+  virtual void setGoalBias(float value);
+  virtual void setMaxDistance(float value);
+  virtual bool setPartialPath();
+  virtual int smoothFoundPath(int steps,int maxTimePerPass);
+  virtual void getPathData(std::vector<float>& data);
+  virtual int getVector(CHolonomicPathNode* fromPoint, CHolonomicPathNode* toPoint,float vect[7],float e,float& artificialLength,bool dontDivide);
 
-	virtual void getSearchTreeData(std::vector<float>& data,bool fromStart);
+  virtual void getSearchTreeData(std::vector<float>& data,bool fromStart);
 
-	virtual void setAngularCoefficient(float coeff);
-	virtual void setStepSize(float size);
+  virtual void setAngularCoefficient(float coeff);
+  virtual void setStepSize(float size);
 
-	std::vector<CHolonomicPathNode*> fromStart;
-	std::vector<CHolonomicPathNode*> fromGoal;
-	std::vector<CHolonomicPathNode*> foundPath;
+  std::vector<CHolonomicPathNode*> fromStart;
+  std::vector<CHolonomicPathNode*> fromGoal;
+  std::vector<CHolonomicPathNode*> foundPath;
 
-private:
-	virtual bool doCollide(float* dist);
+protected:
+  virtual bool doCollide(float* dist);
 
-	virtual bool addVector(C3Vector& pos,C4Vector& orient,float vect[7]);
-	virtual bool areDirectionConstraintsRespected(float vect[7]);
-	virtual bool areSomeValuesForbidden(float values[7]);
+  virtual bool addVector(C3Vector& pos,C4Vector& orient,float vect[7]);
+  virtual bool areDirectionConstraintsRespected(float vect[7]);
+  virtual bool areSomeValuesForbidden(float values[7]);
+  virtual bool areSomeValuesForbidden(C7Vector configuration);
 
-	C4Vector _gammaAxisRotation;
-	C4Vector _gammaAxisRotationInv;
+  int startDummyID;
+  int goalDummyID;
+  int planningType;
+  float angularCoeff;
+  float stepSize;
+  float _searchMinVal[4];
+  float _searchRange[4];
+  int _directionConstraints[4];
+  bool _directionConstraintsOn;
 
-	C7Vector _startDummyCTM;
-	C7Vector _startDummyLTM;
+  C4Vector _gammaAxisRotation;
+  C4Vector _gammaAxisRotationInv;
 
-	std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
+  C7Vector _startDummyCTM;
+  C7Vector _startDummyLTM;
 
-    // Adjustable parameters -
-    // Randomized approach can be applied, for the details refer to the following
-    // paper; Completely randomized RRT-connect proposed by D Schneider, ICRA2015
-    float _goalBias;
-    float _maxDistance;
+  int numberOfRandomConnectionTries_forSteppedSmoothing;
+  int numberOfRandomConnectionTriesLeft_forSteppedSmoothing;
+  int sameStraightLineNextID_forSteppedSmoothing;
+  int nextIteration_forSteppedSmoothing;
 
-    CHolonomicPathPlanning* ptrPlanner;
-    CHolonomicPathPlanning* (*constructor_table[10]) (int theStartDummyID, int theGoalDummyID,
-                                                      int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
-                                                      int thePlanningType, float theAngularCoeff,
-                                                      float theStepSize,
-                                                      const float theSearchMinVal[4], const float theSearchRange[4],
-    const int theDirectionConstraints[4], const float clearanceAndMaxDistance[2], const C3Vector& gammaAxis);
+  // <For evaluation
+  int _collision_detection_count;
+  // >
+
+  std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
+
+  // Adjustable parameters -
+  // Randomized approach can be applied, for the details refer to the following
+  // paper; Completely randomized RRT-connect proposed by D Schneider, ICRA2015
+  float _goalBias;
+  float _maxDistance;
+
+  CHolonomicPathPlanning* ptrPlanner;
+  CHolonomicPathPlanning* (*constructor_table[10]) (int theStartDummyID, int theGoalDummyID,
+                                                    int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
+                                                    int thePlanningType, float theAngularCoeff,
+                                                    float theStepSize,
+                                                    const float theSearchMinVal[4], const float theSearchRange[4],
+  const int theDirectionConstraints[4], const float clearanceAndMaxDistance[2], const C3Vector& gammaAxis);
 };
+
+#endif // HOLONOMIC_PATH_PLANNING_H_

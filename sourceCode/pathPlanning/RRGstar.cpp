@@ -45,8 +45,12 @@
 #include "pathPlanningInterface.h"
 #include "v_repLib.h"
 
+#include <string>
+
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
+
+#define KNN
 
 RRGstar::RRGstar(int theStartDummyID, int theGoalDummyID,
                                int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
@@ -229,21 +233,11 @@ void RRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
       }
     }
   } else { // !fromTheStart
-    if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
-      for (int i = 0; i < int(cont.size()); i++) {
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
-        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
+    if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
         /*
         for (int j = 0; j < it->_nodes.size(); j++) {
           RRGstarNode* jt = it->_nodes[j].node();
-          if (jt == it->pred) continue;
+          if (jt == it->pred) debug_vectorinue;
 
           C3Vector start(it->values[0], it->values[1], it->values[2]);
           C3Vector goal(jt->values[0], jt->values[1], jt->values[2]);
@@ -256,7 +250,6 @@ void RRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
             data.push_back(d[k]);
         }
         */
-      }
     }
   }
 }
@@ -406,6 +399,29 @@ bool RRGstar::setPartialPath() {
   float result = getBestSolutionPath(path, _goal_node);
   printf("Final solution cost : %f\n", _goal_node->d);
 
+  FILE *ofp = NULL;
+  char file_name[256] = "RRGstar";
+#ifdef CACHING
+  strcat(file_name, "_caching");
+#endif
+#ifdef DYNAMIC
+  strcat(file_name, "_dynamic");
+#endif
+#ifdef WITNESS
+  strcat(file_name, "_witness");
+#endif
+  strcat(file_name, ".log");
+  ofp = fopen(file_name, "a");
+  if (ofp == NULL) {
+    fprintf(stderr, "File Open Error!\n");
+    exit(1);
+  }
+
+  fprintf(ofp, "%lu\t%f\t%d\t%f\n",
+          _nn->size(), _goal_node->d, _collision_detection_count, sum_degree / (double)nodes.size());
+
+  fclose(ofp);
+
   return true;
 }
 
@@ -420,6 +436,11 @@ RRGstarNode* RRGstar::extend(RRGstarNode* from, RRGstarNode* to,
   RRGstarNode* extended = from->copyYourself();
   float theVect[7] = {0.0, };
   int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
+
+  char str[10];
+  sprintf(str, "%d", passes);
+  simAddStatusbarMessage(str);
+
   int currentPass;
 
   C3Vector pos(extended->values);

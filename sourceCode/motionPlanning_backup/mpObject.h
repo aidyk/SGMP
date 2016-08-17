@@ -44,8 +44,6 @@
 #pragma once
 
 #include <vector>
-#include <ompl/datastructures/NearestNeighborsGNAT.h>
-#include <ompl/datastructures/NearestNeighborsLinear.h>
 #include "mpPhase1Node.h"
 #include "mpPhase2Node.h"
 #include "4X4Matrix.h"
@@ -77,8 +75,6 @@ public:
 	float* simplifyPath(const float* pathBuffer,int configCnt,int options,float stepSize,int increment,int* outputConfigsCnt,int maxTimeInMs,const int* auxIntParams,const float* auxFloatParams);
 	float* getConfigTransition(const float* startConfig,const float* goalConfig,int options,const int* select,float calcStepSize,float maxOutStepSize,int wayPointCnt,const float* wayPoints,int* outputConfigsCnt,const int* auxIntParams,const float* auxFloatParams);
 
-    float getNearNeighborRadius(void);
-    float distance(Node* a, Node* b);
 
 protected:
 	float _getWorkSpaceDistance(const C7Vector& tr1_relToBase,C7Vector tr2_relToBase,bool ignoreOrientationComponents);
@@ -91,16 +87,15 @@ protected:
 
 	C7Vector _getInterpolatedTransformationOnCurve(const std::vector<C7Vector>& wayPts,const std::vector<float>& wayPtsRelDists,float t);
 
-    Node* extend(Node* toBeExtended,Node* goalNode,float stepSize,bool connect,int collisionCheckMask, float &);
-    Node* lazyExtend(Node* toBeExtended,Node* goalNode,float stepSize,bool connect,int collisionCheckMask, float &);
-    bool _applyJointPosToRobotAndCheckForCollisions_phase2(const float* jointValues,C7Vector& tipTransf,int collisionCheckMask);
-    int _getPhase2Vector(const Node* startNode,const Node* goalNode,float stepSize,float* returnVector);
+	CmpPhase2Node* _extendNode(std::vector<CmpPhase2Node*>& nodeList,CmpPhase2Node* toBeExtended,CmpPhase2Node* goalNode,float stepSize,bool connect,int collisionCheckMask);
+	bool _applyJointPosToRobotAndCheckForCollisions_phase2(const float* jointValues,C7Vector& tipTransf,int collisionCheckMask);
+	int _getPhase2Vector(const CmpPhase2Node* startNode,const CmpPhase2Node* goalNode,float stepSize,float* returnVector);
 	int _getPhase2Vector(const float* startConfig,const float* goalConfig,float stepSize,float* returnVector);
 	void _clearAllPhase2Nodes();
-    Node* _getPhase2ClosestNode(const std::vector<Node*>& nodeList,const Node* aNode);
+	CmpPhase2Node* _getPhase2ClosestNode(const std::vector<CmpPhase2Node*>& nodeList,const CmpPhase2Node* aNode);
 	bool _simplifyFoundPath(const int* auxIntParams,const float* auxFloatParams,int incrementStep,float stepSize,bool activityToConsole,int collisionCheckMask,int maxTimeInMs);
 	bool _simplifyFoundPath_pass(int incrementStep,float stepSize,bool activityToConsole,int collisionCheckMask,int maxTimeInMs);
-    C7Vector _getTipTranformationFromPhase2Node(const Node& node);
+	C7Vector _getTipTranformationFromPhase2Node(const CmpPhase2Node& node);
 
 
 	std::vector<CmpPhase1Node*> _allNodes;
@@ -134,41 +129,7 @@ protected:
 	std::vector<float> _robotMetric;
 	std::vector<int> _closeNodesIndices;
 
-    std::vector<Node*> _nodeListFromStart;
-    std::vector<Node*> _nodeListFromGoal;
-    std::vector<Node*> _nodeListFoundPath;
-
-    bool isFree(Node*, int mask);
-    void DynamicShortestPathUpdate(int, float);
-    void DynamicDecrease(Node *node);
-    void DynamicIncrease(Node *from, Node *to);
-    void DynamicDelete(Node *from, Node *to);
-
-    //boost::shared_ptr<ompl::NearestNeighborsLinear<Node*> > _nn;
-    boost::shared_ptr<ompl::NearestNeighborsGNAT<Node*> > _nn;
-
-    std::vector<double> _collisionCache;
-    float _kConstant;
-    // <RRG controllable parameters
-    float _ballRadiusConst;
-    float _ballRadiusMax;
-    float _goalBias;
-    float _maxDistance;
-    // >
-    Node* _start_node;
-    Node* _goal_node;
-    float _best_cost;
-
-    // <For evaluation
-    int _skipped_collision_detection_count;
-    int _dynamic_increase_count;
-    int _dynamic_decrease_count;
-    int _collision_detection_count;
-
-    int _remove_time;
-    int _collision_detection_time; // in ms
-    int _dynamic_increase_time;
-    int _dynamic_decrease_time;
-    int _near_neighbor_search_time;
-    // >
+	std::vector<CmpPhase2Node*> _nodeListFromStart;
+	std::vector<CmpPhase2Node*> _nodeListFromGoal;
+	std::vector<CmpPhase2Node*> _nodeListFoundPath;
 };

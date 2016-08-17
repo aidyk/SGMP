@@ -126,7 +126,7 @@ private:
   boost::shared_ptr<ompl::NearestNeighborsLinear<RRGstarNode*> > _nn;
 
   // <For evaluation
-  float _collision_detection_count;
+  int _collision_detection_count;
   // >
 
   // <RRG controllable parameters

@@ -44,23 +44,6 @@
 #include "mpObject.h"
 #include "v_repLib.h"
 #include <stdio.h>
-#include <queue>
-
-#define CONST_E 2.718281828
-
-//#define RRT
-// #define RRG
-
-#define CACHING
-// #define DYNAMIC
-// #define WITNESS // should be used with WITNESS
-#define TIME
-#define ONCE
-#define KNN
-// #define BOUND
-#define TIMELAPSE
-
-using namespace std;
 
 CmpObject::CmpObject()
 {
@@ -68,7 +51,7 @@ CmpObject::CmpObject()
 
 CmpObject::~CmpObject()
 {
-    _clearAllPhase1Nodes();
+	_clearAllPhase1Nodes();
 	_clearAllPhase2Nodes();
 }
 
@@ -148,8 +131,6 @@ void CmpObject::setData(int jointCnt,const int* jointHandles,const int* jointSte
 	}
 	else
 		_targetDummy=NULL;
-
-
 }
 
 int CmpObject::getPhase1NodesRenderData(int index,float** pos)
@@ -175,17 +156,13 @@ int CmpObject::getPhase1ConnectionData(int index,int cIndex,float** pos)
 
 int CmpObject::getPhase2NodesRenderData(unsigned char what,int index,float** pos1,float** pos2)
 { // what=0 --> from start, what=1 --> from goal, what=2 --> found path
-    //vector<Node*> cont;
-    //_nn->list(cont);
 	if (what==0)
 	{
 		index++;
-        if (index>=int(_nodeListFromStart.size()))
-            return(-1);
-        //if (cont[index]->pred != NULL) {
-          //pos1[0]=cont[index]->tipTransf.X.data;
-          //pos2[0]=cont[index]->pred->tipTransf.X.data;
-        //}
+		if (index>=int(_nodeListFromStart.size()))
+			return(-1);
+		pos1[0]=_nodeListFromStart[index]->tipTransf.X.data;
+		pos2[0]=_nodeListFromStart[index]->parentNode->tipTransf.X.data;
 		return(0);
 	}
 	if (what==1)
@@ -639,23 +616,6 @@ bool CmpObject::_performIkThenCheckForCollision(const float* initialJointPositio
 	return(false);
 }
 
-float CmpObject::distance(Node *a, Node* b) {
-	float l=0.0f;
-	for (int i=0;i<int(_cyclicJointFlags.size());i++)
-	{
-		float dx=b->jointPositions[i]-a->jointPositions[i];
-		if (_cyclicJointFlags[i]!=0)
-		{ // joint is cyclic
-			if (dx>=0.0f)
-				dx=fmod(dx+3.141592653589f,6.283185307179f)-3.141592653589f;
-			else
-				dx=fmod(dx-3.141592653589f,6.283185307179f)+3.141592653589f;
-		}
-		l+=dx*_robotMetric[i]*dx*_robotMetric[i];
-	}
-  return sqrt(l);
-}
-
 bool CmpObject::_performIkThenCheckForCollision__(const float* initialJointPositions,float* finalJointPositions,const C7Vector& targetNewLocal,int collisionCheckMask)
 { // return true means success
 	// Let's move the robot via IK into the desired position (initialJointPositions needs to be 'quite close'):
@@ -786,20 +746,6 @@ float CmpObject::_getConfigErrorSquared(const float* config1,const float* config
 	return(err);
 }
 
-float CmpObject::getNearNeighborRadius() {
-  // return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + fromStart.size()) / (1.0 + fromStart.size()), 0.33));
-    //if (planningType == sim_holonomicpathplanning_xyzabg) {
-    //  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.1666));
-    //} else {
-#ifdef KNN
-  return ceil(log(1.0 + _nn->size()) * _kConstant);
-#else
-  return fmin(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.3333));
-#endif
-  //}
-}
-
-
 float* CmpObject::findPath(const float* startConfig,const float* goalConfig,int options,float stepSize,int* outputConfigsCnt,int maxTimeInMs,const int* auxIntParams,const float* auxFloatParams)
 {
 	// if ((options&8)!=0) we output some activity to the console
@@ -809,245 +755,139 @@ float* CmpObject::findPath(const float* startConfig,const float* goalConfig,int 
 	// if ((options&256)!=0) we return the distance without orientation component
 
 	bool activityToConsole=((options&8)!=0);
-    bool simplifyFoundPath=((options&64)!=0);
-    bool returnedDistanceHasNoOrientationComponent=((options&256)!=0);
+	bool simplifyFoundPath=((options&64)!=0);
+	bool returnedDistanceHasNoOrientationComponent=((options&256)!=0);
 
-    int collisionCheckMask=1+2; // 1=self-collision, 2=robot-environment
-    if ((options&16)!=0)
-        collisionCheckMask-=1;
-    if ((options&32)!=0)
-        collisionCheckMask-=2;
+	int collisionCheckMask=1+2; // 1=self-collision, 2=robot-environment
+	if ((options&16)!=0)
+		collisionCheckMask-=1;
+	if ((options&32)!=0)
+		collisionCheckMask-=2;
 
-    outputConfigsCnt[0]=0;
+	outputConfigsCnt[0]=0;
 	_clearAllPhase2Nodes();
 
 	C7Vector tipStartTransf,tipGoalTransf;
 	if (_applyJointPosToRobotAndCheckForCollisions_phase2(startConfig,tipStartTransf,collisionCheckMask)||_applyJointPosToRobotAndCheckForCollisions_phase2(goalConfig,tipGoalTransf,collisionCheckMask))
-    {
-        // std::cout << "Start || goal conf. is colliding" << std::endl;
+	{
 		if (activityToConsole)
 			printf("Start or goal configuration is colliding.\n");
-        return(NULL);
+		return(NULL);
 	}
 
 	float* retVal=NULL;
 
-    _start_node=new Node(_cyclicJointFlags.size(),goalConfig,tipStartTransf);
-    _nodeListFromStart.push_back(_start_node);
-    _goal_node=new Node(_cyclicJointFlags.size(),startConfig,tipGoalTransf);
+	CmpPhase2Node* startN=new CmpPhase2Node(_cyclicJointFlags.size(),startConfig,tipStartTransf);
+	_nodeListFromStart.push_back(startN);
+	CmpPhase2Node* goalN=new CmpPhase2Node(_cyclicJointFlags.size(),goalConfig,tipGoalTransf);
+	_nodeListFromGoal.push_back(goalN);
+	bool foundAPath=false;
 
-    // _nodeListFromGoal.push_back(_goal_node);
+	std::vector<float> constr(_jointHandles.size(),1.0f);
+	if (_getConfigErrorSquared(startN->jointPositions,goalN->jointPositions,&constr[0])>0.00001f)
+	{ // ok, the start and goal configs are far enough
+		std::vector<CmpPhase2Node*>* current=&_nodeListFromStart;
+		std::vector<CmpPhase2Node*>* nextCurrent=&_nodeListFromGoal;
+		int startTime=simGetSystemTimeInMs(-1);
+		bool firstPass=true;
+		while ((maxTimeInMs==0)||(_simGetTimeDiffInMs(startTime)<maxTimeInMs))
+		{
+			for (int altern=0;altern<2;altern++)
+			{
+				CmpPhase2Node* randNode;
+				if (firstPass)
+				{ // if first pass, we try to link start to goal directly!
+					randNode=new CmpPhase2Node(_cyclicJointFlags.size(),goalN->jointPositions,goalN->tipTransf);
+				}
+				else
+				{ // we have to create a random node:
+					std::vector<float> pos;
+					for (int i=0;i<int(_cyclicJointFlags.size());i++)
+						pos.push_back(_jointMinVals[i]+_jointRanges[i]*SIM_RAND_FLOAT);
+					randNode=new CmpPhase2Node(_cyclicJointFlags.size(),&pos[0],tipStartTransf); // last argument is not used
+				}
+				if (activityToConsole)
+					printf("*");
+				CmpPhase2Node* closest=_getPhase2ClosestNode(*current,randNode);
+				closest=_extendNode(*current,closest,randNode,stepSize,false,collisionCheckMask);
+				if (closest!=NULL)
+				{ // ok, we could extend the node a bit
+					// Let's try to connect the extension to the other list:
+					CmpPhase2Node* closestConnect=_getPhase2ClosestNode(*nextCurrent,closest);
+					closestConnect=_extendNode(*nextCurrent,closestConnect,closest,stepSize,true,collisionCheckMask);
+					if (closestConnect!=NULL)
+					{ // ok, we can perform the connection. We have found a path!
+						if (activityToConsole)
+							printf("Found a path from start to goal.\n");
+						foundAPath=true;
+						if (current==&_nodeListFromStart)
+						{ // current list is from start
+							CmpPhase2Node* iterat=closest;
+							while (iterat!=NULL)
+							{
+								_nodeListFoundPath.insert(_nodeListFoundPath.begin(),iterat->copyYourself(_cyclicJointFlags.size()));
+								iterat=iterat->parentNode;
+							}
+							iterat=closestConnect;
+							while (iterat!=NULL)
+							{
+								_nodeListFoundPath.push_back(iterat->copyYourself(_cyclicJointFlags.size()));
+								iterat=iterat->parentNode;
+							}
+						}
+						else
+						{ // current list is from goal
+							CmpPhase2Node* iterat=closest;
+							while (iterat!=NULL)
+							{
+								_nodeListFoundPath.push_back(iterat->copyYourself(_cyclicJointFlags.size()));
+								iterat=iterat->parentNode;
+							}
+							iterat=closestConnect;
+							while (iterat!=NULL)
+							{
+								_nodeListFoundPath.insert(_nodeListFoundPath.begin(),iterat->copyYourself(_cyclicJointFlags.size()));
+								iterat=iterat->parentNode;
+							}
+						}
+					}
+				}
+				delete randNode;
+				std::vector<CmpPhase2Node*>* tmpCurrent=nextCurrent;
+				nextCurrent=current;
+				current=tmpCurrent;
+				if (foundAPath)
+					break;
+				firstPass=false;
+			}
+			if (foundAPath)
+				break;
+		}
 
-    _start_node->setCost(0);
-    _goal_node->setCost(SIM_MAX_FLOAT);
+		if (foundAPath&&(!firstPass))
+		{
+			if (simplifyFoundPath)
+			{
+				if (!_simplifyFoundPath(auxIntParams,auxFloatParams,1,stepSize,activityToConsole,collisionCheckMask,999999))
+				{ // should never happen
+					foundAPath=false;
+				}
+			}
+		}
 
-    // _nn.reset(new ompl::NearestNeighborsLinear<Node*>()); // Initialize NearestNeighbors structure
-     _nn.reset(new ompl::NearestNeighborsGNAT<Node*>()); // Initialize NearestNeighbors structure
-    // _nn.reset(new ompl::NearestNeighborsFLANNLinear<Node*>()); // Initialize NearestNeighbors structure
-    _nn->setDistanceFunction(boost::bind(&CmpObject::distance, this, _1, _2));
-    _nn->add(_start_node);
-    _nn->add(_goal_node);
-
-    // Set ballRadiusMax and ballRadiusConst to maximum extent
-    // _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
-    _ballRadiusMax = _ballRadiusConst = 509.0f;
-    _best_cost = SIM_MAX_FLOAT;
-
-    _kConstant = CONST_E + CONST_E / 3.0;
-    //  _kConstant = CONST_E + CONST_E / 6.0;
-
-    // Initialize distance to the nearest collision-free space to MAX
-    _start_node->free_radius = _ballRadiusMax;
-    _goal_node->free_radius = 0.0;
-
-    _collision_detection_count = _skipped_collision_detection_count = 0;
-    _dynamic_decrease_count = _dynamic_increase_count = 0;
-
-    _collision_detection_time = _dynamic_increase_time = _dynamic_decrease_time = 0;
-    _near_neighbor_search_time = 0;
-    _remove_time = 0;
-
-    FILE *tfp = fopen("time_lapse.txt", "a");
-    std::vector<float> constr(_jointHandles.size(),1.0f);
-    if (_getConfigErrorSquared(_start_node->jointPositions,_goal_node->jointPositions,&constr[0])>0.00001f)
-    { // ok, the start and goal configs are far enough
-      int startTime=simGetSystemTimeInMs(-1);
-
-#ifdef TIMELAPSE
-      int passes = 0;
-      int break_point = 1000;
-#endif
-
-      maxTimeInMs = 60000;
-      Node* randNode = new Node(_cyclicJointFlags.size(),goalConfig,tipGoalTransf);
-      int initTime = simGetSystemTimeInMs(-1);
-      while ((maxTimeInMs==0)||(_simGetTimeDiffInMs(startTime)<maxTimeInMs))
-      {
-        Node *dummy;
-
-        for (int i=0;i<int(_cyclicJointFlags.size());i++)
-          randNode->jointPositions[i] = _jointMinVals[i]+_jointRanges[i]*SIM_RAND_FLOAT;
-
-#ifdef TIME
-        int elapsed_time = simGetSystemTimeInMs(-1);
-#endif
-
-        Node* closest = _nn->nearest(randNode);
-#ifdef TIME
-        _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-        float artificialCost;
-        assert(closest != NULL); // Impossible!
-
-        if (!isFree(randNode, collisionCheckMask)) continue;
-
-        /*
-        if (dist > _ballRadiusConst * _maxDistance) {
-        randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
-        }
-        */
-        Node* extended = randNode->copyYourself(_cyclicJointFlags.size()); // Hm...
-        std::vector<Node*> neighbors;
-    #ifdef TIME
-        elapsed_time = simGetSystemTimeInMs(-1);
-    #endif
-    #ifdef KNN
-        _nn->nearestK(extended, getNearNeighborRadius(), neighbors);
-    #else
-        _nn->nearestR(extended, getNearNeighborRadius(), neighbors);
-    #endif
-        _nn->add(extended);
-    #ifdef TIME
-        _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
-    #endif
-
-        // <LazyChooseParent
-        for (unsigned int i = 0; i < neighbors.size(); i++) {
-#ifdef RRG
-          dummy = extend(neighbors[i], extended, stepSize, true, collisionCheckMask, artificialCost);
-#else
-          dummy = lazyExtend(neighbors[i], extended, stepSize, true, collisionCheckMask, artificialCost);
-#endif
-          // dummy ignored
-
-          if (dummy == NULL) continue;
-          extended->addNode(neighbors[i], artificialCost);
-          neighbors[i]->addNode(extended, artificialCost);
-
-#ifdef DYNAMIC
-#ifdef WITNESS
-          // if extended->witness is not null, it must be closer C_obs point than
-          // neighbors[i]->witness.
-          if (extended->witness == NULL && neighbors[i]->witness != NULL) {
-            float dist_to_witness = distance(extended, neighbors[i]->witness);
-
-            if (extended->free_radius < dist_to_witness) {
-              extended->free_radius = dist_to_witness;
-              extended->witness = neighbors[i]->witness;
-            }
-          }
-#else
-          if (artificialCost + neighbors[i]->free_radius < extended->free_radius) {
-            extended->free_radius = artificialCost + neighbors[i]->free_radius; // Initialize conservative way
-          }
-#endif
-#endif
-
-          // ChoosParent
-          if (neighbors[i]->getCost() + artificialCost < extended->getCost()) {
-            extended->pred = neighbors[i];
-            extended->setCost(neighbors[i]->getCost() + artificialCost);
-          }
-        }
-
-        if (extended->pred != NULL) { // Update children infomation later.
-          extended->pred->addChild(extended);
-        }
+	}
+	else
+	{ // the start and goal configs are too close, maybe even coincident.
+		// We just add a single configuration point to notify this
+		if (activityToConsole)
+			printf("Start and goal are coincident. Returning a single configuration.\n");
+		foundAPath=true;
+		_nodeListFoundPath.push_back(goalN->copyYourself(_jointHandles.size()));
+	}
 
 
-        // >
-#ifdef TIME
-        elapsed_time = simGetSystemTimeInMs(-1);
-#endif
-        DynamicDecrease(extended); // Similar to UpdateChildren
-#ifdef TIME
-        _dynamic_decrease_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-        DynamicShortestPathUpdate(collisionCheckMask, stepSize); // LazyUpdate including DynamicIncrease
 
-#ifdef TIMELAPSE
-        if (_simGetTimeDiffInMs(initTime) + passes >= break_point) {
-          float bc = _goal_node->getCost();
-          fprintf(tfp, "%f\n", bc);
-          break_point += 1000;
-        }
-#endif
-      }
-    }
-    else
-    { // the start and goal configs are too close, maybe even coincident.
-      // We just add a single configuration point to notify this
-      if (activityToConsole)
-        printf("Start and goal are coincident. Returning a single configuration.\n");
-      _nodeListFoundPath.push_back(_goal_node->copyYourself(_jointHandles.size()));
-    }
-
-    printf("%lu\n", _nn->size());
-
-    std::vector<Node*> nodes;
-    _nn->list(nodes);
-
-    int sum_degree = 0;
-    for (unsigned int i = 0; i < nodes.size(); i++) {
-      sum_degree += nodes[i]->_edges.size();
-    }
-
-    Node *it = _goal_node;
-    while (it != NULL) {
-      _nodeListFoundPath.push_back(it->copyYourself(_jointHandles.size()));
-      it = it->pred;
-    }
-
-    printf("Avg. Degree : %f\n", sum_degree / (double)nodes.size());
-    printf("DD : %d // DI : %d\n", _dynamic_decrease_count, _dynamic_increase_count);
-    printf("Final solution cost : %f\n", _best_cost);
-    printf("Collision Detection : %d\n", _collision_detection_count);
-
-    FILE *ofp = NULL;
-    char file_name[256] = "MPLazyRRGstar";
-  #ifdef CACHING
-    strcat(file_name, "_caching");
-  #endif
-  #ifdef DYNAMIC
-    strcat(file_name, "_dynamic");
-  #endif
-  #ifdef WITNESS
-    strcat(file_name, "_witness");
-  #endif
-    strcat(file_name, ".log");
-    ofp = fopen(file_name, "a");
-    if (ofp == NULL) {
-      fprintf(stderr, "File Open Error!\n");
-      exit(1);
-    }
-
-    fprintf(ofp, "%lu\t%f\t%d\t%d\t%d\t%d",
-            _nn->size(), _best_cost, _collision_detection_count, _skipped_collision_detection_count,
-            _dynamic_decrease_count, _dynamic_increase_count);
-#ifdef TIME
-    fprintf(ofp, "\t%f\t%f\t%f\t%f\t%f\t",
-            sum_degree / (double)nodes.size(), _collision_detection_time / 1000.0f, _dynamic_decrease_time / 1000.0f,
-            _dynamic_increase_time / 1000.0f, _near_neighbor_search_time / 1000.0f);
-#endif
-
-    fprintf(ofp, "\n");
-
-    fclose(ofp);
-
-    fprintf(tfp, "\n");
-    fclose(tfp);
-
-    if (_goal_node->getCost() < 10000.0f)
+	if (foundAPath)
 	{
 		// prepare the return buffer (joint configs + length values + tip pos + tip orient + tip length values):
 		int dofs=_jointHandles.size();
@@ -1059,7 +899,7 @@ float* CmpObject::findPath(const float* startConfig,const float* goalConfig,int 
 		float l2=0.0f;
 
 		retVal=(float*)new char[(configs*dofs + configs + configs*3 + configs*4 + configs)*4];
-        for (int i=0;i<configs;i++)
+		for (int i=0;i<configs;i++)
 		{
 			for (int j=0;j<dofs;j++)
 				retVal[i*dofs+j]=_nodeListFoundPath[i]->jointPositions[j];
@@ -1097,142 +937,52 @@ float* CmpObject::findPath(const float* startConfig,const float* goalConfig,int 
 }
 
 
-Node* CmpObject::lazyExtend(Node* from,Node* to,float stepSize,bool connect,int collisionCheckMask, float &artificialCost)
-{
-  Node* extended = from->copyYourself(_cyclicJointFlags.size());
-  artificialCost = distance(from, to);
-#ifndef DYNAMIC
-  return extended;
-#endif
 
-#ifdef TIME
-  int elapsed_time = simGetSystemTimeInMs(-1);
-#endif
 
-  // If connect is true, then return value indicates that connection can be performed
-  std::vector<float> extensionVectorPiece(_cyclicJointFlags.size(),0.0f);
-  int passes=_getPhase2Vector(extended,to,stepSize,&extensionVectorPiece[0]);
-  float delta_magnitude = artificialCost / passes;
-  float magnitude = 0.0f;
-  for (int currentPass=0;currentPass<passes;currentPass++)
-  {
-    magnitude += delta_magnitude;
-
-    for (int i=0;i<int(_cyclicJointFlags.size());i++)
-        extended->jointPositions[i] += extensionVectorPiece[i];
-
-    if (magnitude < from->free_radius || artificialCost - magnitude < to->free_radius) {
-#ifdef TIME
-  _skipped_collision_detection_count += 1;
-#endif
-      continue;
-    }
-
-    C7Vector tipTransf; // relative to base object
-    if (_applyJointPosToRobotAndCheckForCollisions_phase2(&extended->jointPositions[0],tipTransf,collisionCheckMask))
-    { // we collided
-
-#ifdef DYNAMIC
-      Node *witness = extended->copyYourself(_cyclicJointFlags.size());
-      from->updateWitness(magnitude, witness);
-      to->updateWitness(artificialCost - magnitude, witness);
-#endif
-      if (connect) {
-#ifdef TIME
-        _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-        return(NULL);
-      }
-      break;
-    } else {
-#ifdef ONCE
-      break;
-#endif
-    }
-  }
-
-#ifdef TIME
-    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-  return extended;
-}
-
-bool CmpObject::isFree(Node* node, int collisionCheckMask) {
-#ifdef TIME
-  int elapsed_time = simGetSystemTimeInMs(-1);
-#endif
-  std::vector<float> jointPos(_cyclicJointFlags.size(),0.0f);
-
-  for (int i=0;i<int(_cyclicJointFlags.size());i++)
-      jointPos[i]=node->jointPositions[i];
-
-  C7Vector tipTransf; // relative to base object
-  if (_applyJointPosToRobotAndCheckForCollisions_phase2(&jointPos[0],tipTransf,collisionCheckMask))
-  { // we collided
-#ifdef TIME
-    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-      return false;
-  }
-#ifdef TIME
-    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-  return true;
-}
-
-Node* CmpObject::extend(Node* from,Node* to,float stepSize,bool connect,int collisionCheckMask, float &artificialCost)
+CmpPhase2Node* CmpObject::_extendNode(std::vector<CmpPhase2Node*>& nodeList,CmpPhase2Node* toBeExtendedNode,CmpPhase2Node* goalNode,float stepSize,bool connect,int collisionCheckMask)
 {	// return value is !=NULL if extension was performed and connect is false
-  // If connect is true, then return value indicates that connection can be performed
-  Node* extended = from->copyYourself(_cyclicJointFlags.size());
-  std::vector<float> extensionVectorPiece(_cyclicJointFlags.size(),0.0f);
-  int passes=_getPhase2Vector(extended,to,stepSize,&extensionVectorPiece[0]);
+	// If connect is true, then return value indicates that connection can be performed
+	std::vector<float> extensionVectorPiece(_cyclicJointFlags.size(),0.0f);
+	std::vector<float> jointPos(_cyclicJointFlags.size(),0.0f);
+	int passes=_getPhase2Vector(toBeExtendedNode,goalNode,stepSize,&extensionVectorPiece[0]);
+	bool leave=false;
+	int insertedNodes=0;
+	for (int currentPass=0;currentPass<passes;currentPass++)
+	{
+		if (currentPass==passes-1)
+		{
+			if (connect)
+				return(toBeExtendedNode);
+			leave=true;
+		}
+		for (int i=0;i<int(_cyclicJointFlags.size());i++)
+			jointPos[i]=toBeExtendedNode->jointPositions[i]+extensionVectorPiece[i];
 
-  artificialCost = distance(from, to);
+		C7Vector tipTransf; // relative to base object
+		if (_applyJointPosToRobotAndCheckForCollisions_phase2(&jointPos[0],tipTransf,collisionCheckMask))
+		{ // we collided
+			if (connect)
+				return(NULL);
+			if (insertedNodes!=0)
+				return(toBeExtendedNode);
+			return(NULL);
+		}
 
-#ifdef DYNAMIC
-  float delta_magnitude = artificialCost / passes;
-  float magnitude = 0.0f;
-#endif
-#ifdef TIME
-  int elapsed_time = simGetSystemTimeInMs(-1);
-#endif
-
-  for (int currentPass=0;currentPass<passes;currentPass++)
-  {
-#ifdef DYNAMIC
-    magnitude += delta_magnitude;
-#endif
-    for (int i=0;i<int(_cyclicJointFlags.size());i++)
-      extended->jointPositions[i] += extensionVectorPiece[i];
-
-    C7Vector tipTransf; // relative to base object
-    if (_applyJointPosToRobotAndCheckForCollisions_phase2(&(extended->jointPositions[0]),tipTransf,collisionCheckMask))
-    { // we collided
-#ifdef DYNAMIC
-      Node *witness = extended->copyYourself(_cyclicJointFlags.size());
-
-      from->updateWitness(magnitude, witness);
-      to->updateWitness(artificialCost - magnitude, witness);
-#endif
-#ifdef TIME
-    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-
-      return(NULL);
-    }
-  }
-
-#ifdef TIME
-    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-  return extended;
+		// no collision in this configuration. We extend the node:
+		CmpPhase2Node* newNode=new CmpPhase2Node(_cyclicJointFlags.size(),&jointPos[0],tipTransf);
+		newNode->parentNode=toBeExtendedNode;
+		nodeList.push_back(newNode);
+		toBeExtendedNode=newNode;
+		if (leave)
+			return(toBeExtendedNode);
+		insertedNodes++;
+	}
+	return(NULL);
 }
 
 bool CmpObject::_applyJointPosToRobotAndCheckForCollisions_phase2(const float* jointValues,C7Vector& tipTransf,int collisionCheckMask)
 {	// return value is the collision state (true--> colliding)
 	// tipPos is relative to the base frame
-
-    _collision_detection_count += 1;
 
 	for (int j=0;j<int(_jointHandles.size());j++)
 		_simSetJointPosition(_jointObjects[j],jointValues[j]);
@@ -1281,13 +1031,13 @@ bool CmpObject::_applyJointPosToRobotAndCheckForCollisions_phase2(const float* j
 	return(false); // not colliding
 }
 
-int CmpObject::_getPhase2Vector(const Node* start_node,const Node* goal_node,float stepSize,float* returnVector)
-{ // return value is the number of times we have to add 'returnVector' to '_start_node' in order to reach 'goal_node'
-    return(_getPhase2Vector(&start_node->jointPositions[0],&goal_node->jointPositions[0],stepSize,returnVector));
+int CmpObject::_getPhase2Vector(const CmpPhase2Node* startNode,const CmpPhase2Node* goalNode,float stepSize,float* returnVector)
+{ // return value is the number of times we have to add 'returnVector' to 'startNode' in order to reach 'goalNode'
+	return(_getPhase2Vector(&startNode->jointPositions[0],&goalNode->jointPositions[0],stepSize,returnVector));
 }
 
 int CmpObject::_getPhase2Vector(const float* startConfig,const float* goalConfig,float stepSize,float* returnVector)
-{ // return value is the number of times we have to add 'returnVector' to 'start_node' in order to reach 'goal_node'
+{ // return value is the number of times we have to add 'returnVector' to 'startNode' in order to reach 'goalNode'
 	float l=0.0f;
 	for (int i=0;i<int(_cyclicJointFlags.size());i++)
 	{
@@ -1310,13 +1060,13 @@ int CmpObject::_getPhase2Vector(const float* startConfig,const float* goalConfig
 	return(retVal);
 }
 
-Node* CmpObject::_getPhase2ClosestNode(const std::vector<Node*>& nodeList,const Node* aNode)
+CmpPhase2Node* CmpObject::_getPhase2ClosestNode(const std::vector<CmpPhase2Node*>& nodeList,const CmpPhase2Node* aNode)
 { // returns the node in the list 'nodeList' that is closest to 'aNode'
 	float smallestSqDist=1e99;
-    Node* retNode=NULL;
+	CmpPhase2Node* retNode=NULL;
 	for (int ni=0;ni<int(nodeList.size());ni++)
 	{
-        Node* anotherNode=nodeList[ni];
+		CmpPhase2Node* anotherNode=nodeList[ni];
 		float l=0.0f;
 		for (int i=0;i<int(_cyclicJointFlags.size());i++)
 		{
@@ -1365,7 +1115,7 @@ bool CmpObject::_simplifyFoundPath(const int* auxIntParams,const float* auxFloat
 			return(false);
 	}
 	// Simplify from goal to start:
-    int restTime=maxTimeInMs-_simGetTimeDiffInMs(startTime);
+	int restTime=maxTimeInMs-_simGetTimeDiffInMs(startTime);
 	bool success=(restTime>0);
 
 	if (success)
@@ -1373,7 +1123,7 @@ bool CmpObject::_simplifyFoundPath(const int* auxIntParams,const float* auxFloat
 		if (_nodeListFoundPath.size()>2)
 		{
 			// inverse the list (revert direction):
-            std::vector<Node*> tmpPath(_nodeListFoundPath);
+			std::vector<CmpPhase2Node*> tmpPath(_nodeListFoundPath);
 			for (int i=0;i<int(tmpPath.size());i++)
 				_nodeListFoundPath[i]=tmpPath[tmpPath.size()-i-1];
 
@@ -1390,7 +1140,7 @@ bool CmpObject::_simplifyFoundPath(const int* auxIntParams,const float* auxFloat
 	return(success);
 }
 
-C7Vector CmpObject::_getTipTranformationFromPhase2Node(const Node& node)
+C7Vector CmpObject::_getTipTranformationFromPhase2Node(const CmpPhase2Node& node)
 { // returned transformation is relative to base
 	for (int i=0;i<int(_jointObjects.size());i++)
 		_simSetJointPosition(_jointObjects[i],node.jointPositions[i]);
@@ -1407,7 +1157,7 @@ bool CmpObject::_simplifyFoundPath_pass(int incrementStep,float stepSize,bool ac
 	int startTime=simGetSystemTimeInMs(-1);
 	bool success=true;
 
-    std::vector<Node*> originalPath(_nodeListFoundPath);
+	std::vector<CmpPhase2Node*> originalPath(_nodeListFoundPath);
 	_nodeListFoundPath.clear();
 
 	int bottomIndex=0;
@@ -1418,14 +1168,14 @@ bool CmpObject::_simplifyFoundPath_pass(int incrementStep,float stepSize,bool ac
 	{
 		if (activityToConsole)
 			printf("o");
-        Node* bottomNode=_nodeListFoundPath[_nodeListFoundPath.size()-1];
-        Node* topNode=originalPath[topIndex];
+		CmpPhase2Node* bottomNode=_nodeListFoundPath[_nodeListFoundPath.size()-1];
+		CmpPhase2Node* topNode=originalPath[topIndex];
 		int cnt=_getPhase2Vector(bottomNode,topNode,stepSize,&extensionVectorPiece[0]);
 		std::vector<float> jointPos;
 		for (int i=0;i<int(_jointHandles.size());i++)
 			jointPos.push_back(bottomNode->jointPositions[i]);
 		bool failed=false;
-        std::vector<Node*> newNodes;
+		std::vector<CmpPhase2Node*> newNodes;
 		for (int segi=0;segi<cnt;segi++)
 		{
 			for (int i=0;i<int(_jointHandles.size());i++)
@@ -1438,7 +1188,7 @@ bool CmpObject::_simplifyFoundPath_pass(int incrementStep,float stepSize,bool ac
 				break;
 			}
 			else
-                newNodes.push_back(new Node(_jointHandles.size(),&jointPos[0],tipTransf));
+				newNodes.push_back(new CmpPhase2Node(_jointHandles.size(),&jointPos[0],tipTransf));
 		}
 		if (failed)
 		{
@@ -1518,8 +1268,8 @@ float* CmpObject::findIkPath(const float* startConfig,const float* goalPos,const
 	}
 
 	// We add a first node:
-    Node* start_node=new Node(_cyclicJointFlags.size(),startConfig,tipStartTransf);
-    _nodeListFromStart.push_back(start_node);
+	CmpPhase2Node* startN=new CmpPhase2Node(_cyclicJointFlags.size(),startConfig,tipStartTransf);
+	_nodeListFromStart.push_back(startN);
 
 
 	C7Vector startPose;
@@ -1543,7 +1293,7 @@ float* CmpObject::findIkPath(const float* startConfig,const float* goalPos,const
 		// the step count needed from start to goal:
 		int stepCount=int(virtualDist/stepSize)+1;
 
-        // calculate the steps:
+		// calculate the steps:
 		C3Vector dist(goalPoseRel.X-startPoseRel.X);
 		C7Vector interpol;
 		C3Vector dx(dist/float(stepCount));
@@ -1573,7 +1323,7 @@ float* CmpObject::findIkPath(const float* startConfig,const float* goalPos,const
 			std::vector<float> nextJointPos(_jointHandles.size(),0.0f);
 			if (_performIkThenCheckForCollision__(&currentJointPos[0],&nextJointPos[0],targetNewLocal,collisionCheckMask))
 			{ // ok, that worked!
-                Node* aNode=new Node(_cyclicJointFlags.size(),&nextJointPos[0],interpol);
+				CmpPhase2Node* aNode=new CmpPhase2Node(_cyclicJointFlags.size(),&nextJointPos[0],interpol);
 				aNode->parentNode=_nodeListFromStart[_nodeListFromStart.size()-1];
 				_nodeListFromStart.push_back(aNode);
 			}
@@ -1719,7 +1469,7 @@ float* CmpObject::simplifyPath(const float* pathBuffer,int configCnt,int options
 		for (int j=0;j<int(_jointHandles.size());j++)
 			config[j]=pathBuffer[i*_jointHandles.size()+j];
 		_applyJointPosToRobotAndCheckForCollisions_phase2(&config[0],tr,0);
-        Node* node=new Node(_jointHandles.size(),&config[0],tr);
+		CmpPhase2Node* node=new CmpPhase2Node(_jointHandles.size(),&config[0],tr);
 		_nodeListFoundPath.push_back(node);
 	}
 
@@ -1851,8 +1601,8 @@ float* CmpObject::getConfigTransition(const float* startConfig,const float* goal
 	}
 
 
-    Node* start_node=new Node(_cyclicJointFlags.size(),startConfig,tipStartTransf);
-    _nodeListFromStart.push_back(start_node);
+	CmpPhase2Node* startN=new CmpPhase2Node(_cyclicJointFlags.size(),startConfig,tipStartTransf);
+	_nodeListFromStart.push_back(startN);
 
 	std::vector<float> constr(_jointHandles.size(),1.0f);
 	if ((_getConfigErrorSquared(startConfig,goalConfig,&constr[0])>0.00001f)||(wayPointsTotalDistance>0.00001f))
@@ -1926,7 +1676,7 @@ float* CmpObject::getConfigTransition(const float* startConfig,const float* goal
 				{
 					if (_getConfigErrorSquared(&previousJointPos[0],&nextJointPos[0],&constr[0])<(maxOutStepSize*maxOutStepSize))
 					{ // ok, the steps are not too large
-                        Node* aNode=new Node(_cyclicJointFlags.size(),&nextJointPos[0],newRelTipPose);
+						CmpPhase2Node* aNode=new CmpPhase2Node(_cyclicJointFlags.size(),&nextJointPos[0],newRelTipPose);
 						aNode->parentNode=_nodeListFromStart[_nodeListFromStart.size()-1];
 						_nodeListFromStart.push_back(aNode);
 					}
@@ -2035,228 +1785,3 @@ C7Vector CmpObject::_getInterpolatedTransformationOnCurve(const std::vector<C7Ve
 	return(C7Vector::identityTransformation); // should never happen!
 }
 
-void CmpObject::DynamicShortestPathUpdate(int collisionCheckMask, float stepSize) {
-  Node *tracer = _goal_node;
-  std::vector<Node*> solution_path;
-  if (_goal_node->getCost() >= _best_cost) return; // No better 'potential' solution path found this iteration
-
-  // Cutting point priority? from start or goal?
-  // From start is more plausible, stable and would be faster!
-
-  while (true) {
-    int i;
-    Node *from, *to;
-
-    tracer = _goal_node;
-    solution_path.clear();
-    while (tracer != NULL) {
-      solution_path.push_back(tracer);
-      tracer = tracer->pred;
-    }
-
-    for (i = solution_path.size() - 1; i >= 1; i--) {
-      from = solution_path[i];
-      to = solution_path[i- 1];
-
-#ifdef CACHING
-      if (to->isCollisionFree()) continue;
-#endif
-      float artificialCost;
-      Node* dummy = extend(from, to, stepSize, true, collisionCheckMask, artificialCost);
-      if (dummy == NULL) { // collision found
-        // Remove invalid edge and handle other things to maintain the shortestpath tree.
-        from->removeNode(to);
-        from->removeChild(to);
-
-        to->pred = NULL;
-        to->isCollisionFree(false);
-        to->removeNode(from);
-
-#ifdef TIME
-        int elapsed_time = simGetSystemTimeInMs(-1);
-#endif
-        DynamicIncrease(from, to);
-#ifdef TIME
-        _dynamic_increase_time += _simGetTimeDiffInMs(elapsed_time);
-#endif
-        break;
-      } else {
-        to->isCollisionFree(true);
-      }
-    }
-
-    if (i == 0) { // If there is no collision along the solution path.
-      if (_goal_node->getCost() < _best_cost)
-        printf("%f -> %f\n", _best_cost, _goal_node->getCost());
-      _best_cost = std::min(_best_cost, _goal_node->getCost());
-      break;
-    } else if (to->pred == NULL) { // We couldn't connect 'something from root' - to.
-      // There is no way to get a solution now.
-      // Need more samples, drop by next time!
-      // ToDo: is it right?
-      break;
-    }
-  }
-}
-
-// Pre-condition : A newly added node with uninitialized cost(max-value) connected
-// to its near-neighbors. Rewire-similar work is done here.
-// It propagtates cost changes downstream from the initial input node.
-void CmpObject::DynamicDecrease(Node *node) {
-  typedef pair<float, Node*> weight_node;
-  std::priority_queue<weight_node> pq; // Like max-heap (by default)
-
-  _dynamic_decrease_count += 1;
-
-  pq.push(weight_node(-node->getCost(), node));
-  while (!pq.empty()) {
-    weight_node top = pq.top();
-    pq.pop();
-
-    float cost = -top.first; // Inverse the cost value for working as min-heap.
-    Node* node = top.second;
-
-    if (cost > node->getCost()) continue;
-
-    std::vector<Node::Edge> &edges = node->edges();
-    for (unsigned int i = 0; i < edges.size(); i++) { // Rewire-similar
-      Node *neighbor = edges[i].node();
-      float c = edges[i].cost();
-      if (neighbor->getCost() > node->getCost() + c) {
-        neighbor->setCost(node->getCost() + c);
-
-        if (neighbor->pred != NULL) {
-          neighbor->pred->removeChild((neighbor));
-        }
-        neighbor->pred = node;
-        neighbor->isCollisionFree(false);
-        node->addChild(neighbor);
-
-        pq.push(weight_node(-neighbor->getCost(), neighbor));
-      }
-    }
-  }
-}
-
-// Invoked after weight of an edge (q, z) and D(z) are updated.
-void CmpObject::DynamicIncrease(Node *from, Node *to) {
-  static int is_white = 0;
-  // A color code of a node whose color value is
-  // equal to or less than 'is_white' means 'white', 'red' otherwise.
-  is_white += 1;
-
-  _dynamic_increase_count += 1;
-
-  std::vector<Node*> reds;
-  typedef pair<float, Node*> weight_node;
-  priority_queue<weight_node> pq; // Like max-heap (by default)
-  pq.push(weight_node(-to->getCost(), to));
-
-  // <Step 2. Coloring
-  while (!pq.empty()) {
-    weight_node top = pq.top();
-    pq.pop();
-
-    float cost = -top.first;
-    Node* node = top.second;
-
-    if (cost > node->getCost()) continue; // Instead of heap_improve
-
-    // If there exists a non-red neighbor q of z such that D(q) + w_(q,z) = D(z)
-    // set pink (Don't care at this time)
-    // otherwise, set red and enqueue all the children of z
-
-    bool pink_flag = false;
-    std::vector<Node::Edge> &edges = node->edges();
-    for (unsigned int i = 0; i < edges.size(); i++) {
-      Node *neighbor = edges[i].node();
-      float c = edges[i].cost();
-
-      if (neighbor->color != is_white + 1 && neighbor->getCost() + c == cost) {
-        // Actually, '<' should not be happened all the time.
-        // and even '==' would very rarely occur, but theoretically possible.
-        // Set pink
-        pink_flag = true;
-
-        if (node->pred != NULL) {
-          node->pred->removeChild(node);
-        }
-        node->pred = neighbor;
-        node->isCollisionFree(false);
-        neighbor->addChild(node);
-      }
-    }
-    if (pink_flag) continue;
-
-    node->color = is_white + 1; // Set 'red'
-    reds.push_back(node);
-    std::vector<Node*> &children = node->children();
-    for (unsigned int i = 0; i < children.size(); i++) {
-      Node *child = children[i];
-      pq.push(weight_node(-child->getCost(), child));
-    }
-  }
-  // >
-
-  // <Step 3-a. Find best non-red parent for each red node.
-  for (unsigned int i = 0; i < reds.size(); i++) {
-    std::vector<Node::Edge> &edges = reds[i]->edges();
-
-    // Initialize cost : Need to be verified
-    reds[i]->setCost(SIM_MAX_FLOAT);
-    if (reds[i]->pred != NULL) {
-      reds[i]->pred->removeChild(reds[i]);
-      reds[i]->pred = NULL;
-      reds[i]->isCollisionFree(false);
-    }
-
-    for (unsigned int j = 0; j < edges.size(); j++) {
-      Node *neighbor = edges[j].node();
-
-      if (neighbor->color == is_white + 1) continue; // If red, then skip.
-      if (reds[i]->getCost() > neighbor->getCost() + edges[j].cost()) {
-        reds[i]->setCost(neighbor->getCost() + edges[j].cost());
-        reds[i]->pred = neighbor;
-      }
-    }
-    if (reds[i]->pred != NULL) {
-      (reds[i]->pred)->addChild(reds[i]);
-    }
-    // Need to be verified.
-    pq.push(weight_node(-reds[i]->getCost(), reds[i]));
-  }
-  // >
-
-  // <Step 3-b. Propagate the changes; Check a 'red' node can be a better parent node for its neighbors.
-  while (!pq.empty()) {
-    weight_node top = pq.top();
-    pq.pop();
-
-    float cost = -top.first;
-    Node* node = top.second;
-
-    if (node->getCost() < cost) continue; // Rejected by delayed priority update.
-
-    std::vector<Node::Edge> &edges = node->edges();
-    for (unsigned int i = 0; i < edges.size(); i++) {
-      Node *neighbor = edges[i].node();
-      if (neighbor->color != is_white + 1) continue; // If not red, then skip.
-
-      if (cost + edges[i].cost() < neighbor->getCost()) {
-        neighbor->setCost(cost + edges[i].cost());
-        if (neighbor->pred != NULL) {
-          neighbor->pred->removeChild(neighbor);
-        }
-        neighbor->pred = node;
-        neighbor->isCollisionFree(false);
-        node->addChild(neighbor);
-        pq.push(weight_node(-neighbor->getCost(), neighbor));
-      }
-    }
-  }
-  // >
-
-  // The end!
-  // Restoring the original white color for all the red vertices will be automatically done by
-  // increasing is_white variable.
-}
