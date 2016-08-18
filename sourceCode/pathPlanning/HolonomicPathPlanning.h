@@ -67,6 +67,7 @@ public:
   virtual int searchPath(int maxTimePerPass);
   virtual void setGoalBias(float value);
   virtual void setMaxDistance(float value);
+	virtual void setMaxTimebudget(float value);
   virtual bool setPartialPath();
   virtual int smoothFoundPath(int steps,int maxTimePerPass);
   virtual void getPathData(std::vector<float>& data);
@@ -112,6 +113,7 @@ protected:
 
   // <For evaluation
   int _collision_detection_count;
+	float _maxTimebudget;
   // >
 
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;

@@ -145,7 +145,7 @@ protected:
     void DynamicDelete(Node *from, Node *to);
 
     //boost::shared_ptr<ompl::NearestNeighborsLinear<Node*> > _nn;
-    boost::shared_ptr<ompl::NearestNeighborsGNAT<Node*> > _nn;
+		std::shared_ptr<ompl::NearestNeighborsGNAT<Node*> > _nn;
 
     std::vector<double> _collisionCache;
     float _kConstant;

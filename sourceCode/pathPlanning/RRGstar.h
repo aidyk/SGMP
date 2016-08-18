@@ -123,7 +123,7 @@ private:
   C7Vector _startDummyLTM;
 
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
-  boost::shared_ptr<ompl::NearestNeighborsLinear<RRGstarNode*> > _nn;
+	std::shared_ptr<ompl::NearestNeighborsLinear<RRGstarNode*> > _nn;
 
   // <For evaluation
   int _collision_detection_count;

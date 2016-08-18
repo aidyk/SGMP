@@ -46,6 +46,7 @@
 #include <iostream>
 #include "pathPlanningInterface.h"
 #include <cstdio>
+#include <unistd.h>
 
 #ifdef _WIN32
 #include <direct.h>

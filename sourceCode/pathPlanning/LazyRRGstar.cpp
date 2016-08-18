@@ -41,14 +41,22 @@
 //
 // This file was automatically created for V-REP release V3.1.3 on Sept. 30th 2014
 
+#include <ompl/datastructures/NearestNeighborsGNAT.h>
+#include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
+#include <ompl/datastructures/NearestNeighborsLinear.h>
+#include <ompl/datastructures/NearestNeighborsFLANN.h>
+#include <functional>
+#include <memory>
+#include <queue>
+
 #include "LazyRRGstar.h"
 #include "pathPlanningInterface.h"
 #include "v_repLib.h"
 
-#include <queue>
-
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
+
+using namespace std::placeholders;
 
 #define CONST_E 2.718281828
 
@@ -56,13 +64,11 @@
 
 #define CACHING
 #define DYNAMIC
-#define WITNESS // should be used with WITNESS
 #define TIME
 #define ONCE
 #define ANN
 #define KNN
-// #define BOUND
-#define TIMELAPSE
+#define VIS
 
 LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
                                int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
@@ -128,10 +134,13 @@ LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
       _directionConstraintsOn = true;
   }
 
-  // _nn.reset(new ompl::NearestNeighborsLinear<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
-  _nn.reset(new ompl::NearestNeighborsGNAT<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
-  // _nn.reset(new ompl::NearestNeighborsFLANNLinear<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
-  _nn->setDistanceFunction(boost::bind(&LazyRRGstar::distance, this, _1, _2));
+#ifdef ANN
+	_nn.reset(new ompl::NearestNeighborsFLANNHierarchicalClustering<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
+#else
+	_nn.reset(new ompl::NearestNeighborsGNAT<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
+	// _nn.reset(new ompl::NearestNeighborsLinear<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
+#endif
+	_nn->setDistanceFunction((std::bind(&LazyRRGstar::distance, this, _1, _2)));
   _nn->add(_start_node);
   _nn->add(_goal_node);
 
@@ -231,121 +240,151 @@ float LazyRRGstar::distance(LazyRRGstarNode* a, LazyRRGstarNode* b) {
   return sqrt(dist);
 }
 
+bool cmpVis(LazyRRGstarNode* a, LazyRRGstarNode* b) {
+	return a->free_radius < b->free_radius;
+}
+
 void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
-  std::vector<LazyRRGstarNode*> cont;
-  _nn->list(cont);
+	std::vector<LazyRRGstarNode*> cont;
+	_nn->list(cont);
 
-  if (fromTheStart) {
-    if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
-      for (int i = 0; i < int(cont.size()); i++) {
-        if (cont[i]->pred == NULL) continue;
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
-        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
+	if (fromTheStart) {
+		if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
+			for (int i = 0; i < int(cont.size()); i++) {
+				if (cont[i]->pred == NULL) continue;
+				C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
+				C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
 
-    } else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
-      for (int i = 1; i < int(cont.size()); i++) {
-        C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
-        C3Vector goal(cont[i]->pred->values[0], 0.0f, 0.0f);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
+		} else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
+			for (int i = 1; i < int(cont.size()); i++) {
+				C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
+				C3Vector goal(cont[i]->pred->values[0], 0.0f, 0.0f);
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
 
-    } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
-      for (int i = 0; i < int(cont.size()); i++) {
-        if (cont[i]->pred == NULL) continue;
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
-        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
-    }
-  } else { // !fromTheStart - Blue-colored
-    if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
-      for (int i = 0; i < int(cont.size()); i++) {
-        if (cont[i]->pred == NULL || cont[i]->isCollisionFree() || cont[i]->witness == NULL) continue;
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
-        C3Vector goal(cont[i]->witness->values[0], cont[i]->witness->values[1], 0.0f);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
+		} else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
+			for (int i = 0; i < int(cont.size()); i++) {
+				if (cont[i]->pred == NULL) continue;
+				C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+				C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
+		}
+	} else { // !fromTheStart - Blue-colored
 
-        /*
-      for (int i = 0; i < int(cont.size()); i++) {
-        if (cont[i]->pred == NULL || cont[i]->isCollisionFree()) continue;
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
-        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
-      */
-    } else if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
-      for (int i = 1; i < int(cont.size()); i++) {
-        C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
-        C3Vector goal(cont[i]->pred->values[0], 0.0f, 0.0f);
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
+#ifdef VIS
+		std::vector<LazyRRGstarNode*> node_list;
+		_nn->list(node_list);
 
-    } else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
-      for (int i = 0; i < int(cont.size()); i++) {
-          /*
-        if (cont[i]->pred == NULL || cont[i]->isCollisionFree()) continue;
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
-        C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
-        */
-        if (cont[i]->pred == NULL || cont[i]->witness == NULL) continue;
-        C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
-        C3Vector goal(cont[i]->witness->values[0], cont[i]->witness->values[1], cont[i]->witness->values[2]);
+		std::sort(node_list.begin(), node_list.end(), cmpVis);
 
-        start = _startDummyCTM * start;
-        goal = _startDummyCTM * goal;
-        float d[6];
-        start.copyTo(d);
-        goal.copyTo(d + 3);
-        for (int j = 0; j < 6; j++)
-          data.push_back(d[j]);
-      }
-    }
-  }
+		float ambient_color[3] = {1.0, 1.0, 1.0}, dynamic_color[3];
+		simInt point_container = simAddDrawingObject(sim_drawing_points + sim_drawing_itemcolors + sim_drawing_overlay
+																								 , 4, 0.01, -1, 1000000, NULL, NULL, NULL, NULL);
+		for (unsigned int i = 0; i < node_list.size(); i++) {
+			LazyRRGstarNode* it = node_list[i];
+			// The closer, the brighter.
+			C3Vector pos;
+			if (planningType == sim_holonomicpathplanning_xyg) {
+				pos.set(it->values[0], it->values[1], 0.0);
+			} else {
+				pos.set(it->values[0], it->values[1], it->values[2]);
+			}
+			pos = _startDummyCTM * pos;
+			float point_data[6] = {pos.data[0], pos.data[1], pos.data[2], i / (float)node_list.size(),  i / (float)node_list.size(), i / (float)node_list.size()};
+			simAddDrawingObjectItem(point_container, point_data);
+		}
+#endif
+		return;
+		/*
+		if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
+			for (int i = 0; i < int(cont.size()); i++) {
+				if (cont[i]->pred == NULL || cont[i]->isCollisionFree() || cont[i]->witness == NULL) continue;
+				C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
+				C3Vector goal(cont[i]->witness->values[0], cont[i]->witness->values[1], 0.0f);
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
+			*/
+
+		/*
+			for (int i = 0; i < int(cont.size()); i++) {
+				if (cont[i]->pred == NULL || cont[i]->isCollisionFree()) continue;
+				C3Vector start(cont[i]->values[0], cont[i]->values[1], 0.0f);
+				C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], 0.0f);
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
+			*/
+		if ( (planningType == sim_holonomicpathplanning_xg) || (planningType == sim_holonomicpathplanning_xabg) ) {
+			for (int i = 1; i < int(cont.size()); i++) {
+				C3Vector start(cont[i]->values[0], 0.0f, 0.0f);
+				C3Vector goal(cont[i]->pred->values[0], 0.0f, 0.0f);
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
+
+		} else if ( (planningType == sim_holonomicpathplanning_xyz) || (planningType == sim_holonomicpathplanning_xyzg) || (planningType == sim_holonomicpathplanning_xyzabg) ) {
+			for (int i = 0; i < int(cont.size()); i++) {
+				/*
+				if (cont[i]->pred == NULL || cont[i]->isCollisionFree()) continue;
+				C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+				C3Vector goal(cont[i]->pred->values[0], cont[i]->pred->values[1], cont[i]->pred->values[2]);
+				*/
+				if (cont[i]->pred == NULL || cont[i]->witness == NULL) continue;
+				C3Vector start(cont[i]->values[0], cont[i]->values[1], cont[i]->values[2]);
+				C3Vector goal(cont[i]->witness->values[0], cont[i]->witness->values[1], cont[i]->witness->values[2]);
+
+				start = _startDummyCTM * start;
+				goal = _startDummyCTM * goal;
+				float d[6];
+				start.copyTo(d);
+				goal.copyTo(d + 3);
+				for (int j = 0; j < 6; j++)
+					data.push_back(d[j]);
+			}
+		}
+	}
 }
 
 int LazyRRGstar::searchPath(int maxTimePerPass) {
-#ifdef TIMELAPSE
+#ifdef TIME
   FILE *tfp = fopen("time_lapse.txt", "a");
-  int passes = 0;
   int break_point = 1000;
 #endif
 
@@ -377,15 +416,18 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
   int foundAPath = 0;
   int initTime = simGetSystemTimeInMs(-1);
   LazyRRGstarNode* randNode = new LazyRRGstarNode(planningType, _searchMinVal, _searchRange, _gammaAxisRotation, _gammaAxisRotationInv);
-#ifdef OVERTIME
-  FILE* over_fp = NULL;
-  over_fp = fopen("overtime.log", "a");
-  float cut_time = 100.0f;
-  while (_simGetTimeDiffInMs(initTime) < 5000) {
-#else
-  while (_simGetTimeDiffInMs(initTime) < maxTimePerPass) {
+	while (_simGetTimeDiffInMs(initTime) < _maxTimebudget) {
     LazyRRGstarNode* dummy;
+
+#ifdef TIME
+		if (_simGetTimeDiffInMs(initTime) >= break_point) {
+			float bc = _goal_node->getCost();
+			fprintf(tfp, "%f\t%d\t%d\t%d\t%d\n", bc, _collision_detection_count, _dynamic_increase_count,
+							_collision_detection_time, _dynamic_increase_time, _dynamic_decrease_time, _near_neighbor_search_time);
+			break_point += 1000;
+		}
 #endif
+
     randNode->reSample(planningType, _searchMinVal, _searchRange);
 #ifdef TIME
     int elapsed_time = simGetSystemTimeInMs(-1);
@@ -433,22 +475,14 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
       neighbors[i]->addNode(extended, artificialCost);
 
 #ifdef DYNAMIC
-#ifdef WITNESS
-      // if extended->witness is not null, it must be closer C_obs point than
-      // neighbors[i]->witness.
-      if (extended->witness == NULL && neighbors[i]->witness != NULL) {
+			if (neighbors[i]->witness != NULL) {
         float dist_to_witness = distance(extended, neighbors[i]->witness);
 
-        if (extended->free_radius < dist_to_witness) {
+				if (extended->witness == NULL || extended->free_radius > dist_to_witness) {
           extended->free_radius = dist_to_witness;
           extended->witness = neighbors[i]->witness;
         }
       }
-#else
-      if (artificialCost + neighbors[i]->free_radius < extended->free_radius) {
-        extended->free_radius = artificialCost + neighbors[i]->free_radius; // Initialize conservative way
-      }
-#endif
 #endif
 
       // ChoosParent
@@ -471,22 +505,13 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
     _dynamic_decrease_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
     DynamicShortestPathUpdate(startDummy); // LazyUpdate including DynamicIncrease
-
-#ifdef TIMELAPSE
-    if (_simGetTimeDiffInMs(initTime) + passes >= break_point) {
-      float bc = _goal_node->getCost();
-      fprintf(tfp, "%f\n", bc);
-      break_point += 1000;
-    }
-#endif
   }
   delete randNode;
 
-#ifdef TIMELAPSE
+#ifdef TIME
   fprintf(tfp, "\n");
   fclose(tfp);
 #endif
-
   // We restore the dummy local config and the constraints
   _simSetObjectLocalTransformation(startDummy, dumSavedConf.X.data, dumSavedConf.Q.data);
   for (int constr = 0; constr < 4; constr++)
@@ -546,9 +571,10 @@ void LazyRRGstar::DynamicShortestPathUpdate(CDummyDummy *startDummy) {
     }
 
     if (i == 0) { // If there is no collision along the solution path.
-      if (_goal_node->getCost() < _best_cost)
+			if (_goal_node->getCost() < _best_cost) {
         printf("%f -> %f\n", _best_cost, _goal_node->getCost());
-      _best_cost = std::min(_best_cost, _goal_node->getCost());
+				_best_cost = _goal_node->getCost();
+			}
       break;
     } else if (to->pred == NULL) { // We couldn't connect 'something from root' - to.
       // There is no way to get a solution now.
@@ -613,15 +639,15 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
 
   std::vector<LazyRRGstarNode*> reds;
   typedef pair<float, LazyRRGstarNode*> weight_node;
-  priority_queue<weight_node> pq; // Like max-heap (by default)
-  pq.push(weight_node(-to->getCost(), to));
+	priority_queue<weight_node> pq; // Like max-heap (by default)
+	pq.push(weight_node(-to->getCost(), to));
 
   // <Step 2. Coloring
   while (!pq.empty()) {
     weight_node top = pq.top();
     pq.pop();
 
-    float cost = -top.first;
+		float cost = -top.first;
     LazyRRGstarNode* node = top.second;
 
     if (cost > node->getCost()) continue; // Instead of heap_improve
@@ -657,7 +683,7 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
     std::vector<LazyRRGstarNode*> &children = node->children();
     for (unsigned int i = 0; i < children.size(); i++) {
       LazyRRGstarNode *child = children[i];
-      pq.push(weight_node(-child->getCost(), child));
+			pq.push(weight_node(-child->getCost(), child));
     }
   }
   // >
@@ -687,7 +713,7 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
       (reds[i]->pred)->addChild(reds[i]);
     }
     // Need to be verified.
-    pq.push(weight_node(-reds[i]->getCost(), reds[i]));
+		pq.push(weight_node(-reds[i]->getCost(), reds[i]));
   }
   // >
 
@@ -696,7 +722,7 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
     weight_node top = pq.top();
     pq.pop();
 
-    float cost = -top.first;
+		float cost = -top.first;
     LazyRRGstarNode* node = top.second;
 
     if (node->getCost() < cost) continue; // Rejected by delayed priority update.
@@ -714,7 +740,7 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
         neighbor->pred = node;
         neighbor->isCollisionFree(false);
         node->addChild(neighbor);
-        pq.push(weight_node(-neighbor->getCost(), neighbor));
+				pq.push(weight_node(-neighbor->getCost(), neighbor));
       }
     }
   }
@@ -774,7 +800,7 @@ float LazyRRGstar::getBestSolutionPath(LazyRRGstarNode* goal_node) {
   return 1.0;
 }
 
-// 'it' should be connected to the root node and has proper cost
+// Return true if 'it' can be part of new best solution.
 bool LazyRRGstar::gotPotential(LazyRRGstarNode* it) {
   LazyRRGstarNode* goal_conf = static_cast<LazyRRGstarNode*>(fromGoal[0]);
   if (goal_conf->getCost() >= SIM_MAX_FLOAT || (distance(goal_conf, it) + it->getCost() < goal_conf->getCost())) {
@@ -835,9 +861,6 @@ bool LazyRRGstar::setPartialPath() {
 #ifdef DYNAMIC
   strcat(file_name, "_dynamic");
 #endif
-#ifdef WITNESS
-  strcat(file_name, "_witness");
-#endif
   strcat(file_name, ".log");
   ofp = fopen(file_name, "a");
   if (ofp == NULL) {
@@ -855,7 +878,6 @@ bool LazyRRGstar::setPartialPath() {
 #endif
 
   fprintf(ofp, "\n");
-
   fclose(ofp);
 
   return true;
@@ -960,8 +982,11 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
   // Return value is != NULL if extention was performed and connect is false
   // If connect is true, then return value indicates that connection can be performed!
   LazyRRGstarNode* extended = from->copyYourself();
+	float theVect[7] = {0.0, };
+	int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
 
 #ifndef DYNAMIC
+	_skipped_collision_detection_count += passes;
   artificialCost = distance(from, to);
   return extended;
 #endif
@@ -970,8 +995,6 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
   int elapsed_time = simGetSystemTimeInMs(-1);
 #endif
 
-  float theVect[7] = {0.0, };
-  int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
   int currentPass;
   float delta_magnitude = artificialCost / passes;
   float magnitude = 0.0f;

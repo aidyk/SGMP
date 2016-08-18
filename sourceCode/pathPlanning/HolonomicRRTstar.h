@@ -117,7 +117,7 @@ private:
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
   std::vector<double> _collisionCache;
   // boost::shared_ptr<ompl::NearestNeighborsLinear<HolonomicRRTstarNode*> > _nn;
-  boost::shared_ptr<ompl::NearestNeighborsGNAT<HolonomicRRTstarNode*> > _nn;
+	std::shared_ptr<ompl::NearestNeighborsGNAT<HolonomicRRTstarNode*> > _nn;
 
   // <For evaluation
   int _collision_detection_count;

@@ -46,6 +46,8 @@
 #include <stdio.h>
 #include <queue>
 
+using namespace std::placeholders;
+
 #define CONST_E 2.718281828
 
 //#define RRT
@@ -844,7 +846,7 @@ float* CmpObject::findPath(const float* startConfig,const float* goalConfig,int 
     // _nn.reset(new ompl::NearestNeighborsLinear<Node*>()); // Initialize NearestNeighbors structure
      _nn.reset(new ompl::NearestNeighborsGNAT<Node*>()); // Initialize NearestNeighbors structure
     // _nn.reset(new ompl::NearestNeighborsFLANNLinear<Node*>()); // Initialize NearestNeighbors structure
-    _nn->setDistanceFunction(boost::bind(&CmpObject::distance, this, _1, _2));
+		_nn->setDistanceFunction(std::bind(&CmpObject::distance, this, _1, _2));
     _nn->add(_start_node);
     _nn->add(_goal_node);
 

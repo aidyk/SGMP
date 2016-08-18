@@ -50,6 +50,8 @@
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
 
+using namespace std::placeholders;
+
 #define KNN
 
 RRGstar::RRGstar(int theStartDummyID, int theGoalDummyID,
@@ -117,7 +119,7 @@ RRGstar::RRGstar(int theStartDummyID, int theGoalDummyID,
   }
 
   _nn.reset(new ompl::NearestNeighborsLinear<RRGstarNode*>()); // Initialize NearestNeighbors structure
-  _nn->setDistanceFunction(boost::bind(&RRGstar::distance, this, _1, _2));
+	_nn->setDistanceFunction(std::bind(&RRGstar::distance, this, _1, _2));
   _nn->add(_start_node);
   _nn->add(_goal_node);
 
@@ -300,7 +302,7 @@ int RRGstar::searchPath(int maxTimePerPass) {
     closest->addNode(extended, cArtificialCost);
 
     RRGstarNode* dummy;
-    for (int i = 0; i < neighbors.size(); i++) if (neighbors[i] != closest) {
+		for (unsigned int i = 0; i < neighbors.size(); i++) if (neighbors[i] != closest) {
       dummy = extend(extended, neighbors[i], true, startDummy, artificialCost);
 
       if (dummy != NULL) {
@@ -336,7 +338,7 @@ float RRGstar::getBestSolutionPath(vector<RRGstarNode*> &path, RRGstarNode* goal
     RRGstarNode* top = pq.top();
     pq.pop();
 
-    for (int i = 0; i < top->_nodes.size(); i++) {
+		for (unsigned int i = 0; i < top->_nodes.size(); i++) {
       RRGstarNode::Edge &edge = top->_nodes[i];
 
       float dist = edge.cost();
@@ -389,7 +391,7 @@ bool RRGstar::setPartialPath() {
   _nn->list(nodes);
 
   int sum_degree = 0;
-  for (int i = 0; i < nodes.size(); i++) {
+	for (unsigned int i = 0; i < nodes.size(); i++) {
     sum_degree += nodes[i]->_nodes.size();
   }
 

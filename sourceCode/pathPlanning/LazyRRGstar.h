@@ -44,10 +44,6 @@
 #ifndef LAZY_RRGSTAR_H_
 #define LAZY_RRGSTAR_H_
 
-// #include <ompl/datastructures/NearestNeighborsFLANN.h>
-#include <ompl/datastructures/NearestNeighborsGNAT.h>
-// #include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
-#include <ompl/datastructures/NearestNeighborsLinear.h>
 #include <vector>
 
 #include "HolonomicPathPlanning.h"
@@ -106,8 +102,7 @@ private:
 
   bool gotPotential(LazyRRGstarNode* it);
 
-  // boost::shared_ptr<ompl::NearestNeighborsLinear<LazyRRGstarNode*> > _nn;
-  boost::shared_ptr<ompl::NearestNeighborsGNAT<LazyRRGstarNode*> > _nn;
+	std::shared_ptr<ompl::NearestNeighbors<LazyRRGstarNode*> > _nn;
 
   float _kConstant;
   // <RRG controllable parameters

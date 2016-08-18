@@ -147,7 +147,10 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
       } else {
         fprintf(stderr, "$maxDistance should be betewen 0.0 ~ 1.0\n");
       }
-    } else {
+		} else if (!strcmp(option_type, "maxTimebudget")) {
+			ptrPlanner->setMaxTimebudget(option_value);
+			printf("%s : %f\n", option_type, option_value);
+		} else {
       fprintf(stderr, "Invalid option, %s : %f\n", option_type, option_value);
     }
   }
@@ -181,6 +184,10 @@ void CHolonomicPathPlanning::setGoalBias(float value) {
 
 void CHolonomicPathPlanning::setMaxDistance(float value) {
   _maxDistance = value;
+}
+
+void CHolonomicPathPlanning::setMaxTimebudget(float value) {
+	_maxTimebudget = value;
 }
 
 bool CHolonomicPathPlanning::setPartialPath() {

@@ -48,6 +48,8 @@
 #define SIM_MIN(a,b) (((a)<(b)) ? (a) : (b))
 #define SIM_MAX(a,b) (((a)>(b)) ? (a) : (b))
 
+using namespace std::placeholders;
+
 #define CONST_E 2.718281828
 
 //#define KNN
@@ -120,7 +122,7 @@ HolonomicRRTstar::HolonomicRRTstar(int theStartDummyID, int theGoalDummyID,
 
   // _nn.reset(new ompl::NearestNeighborsLinear<HolonomicRRTstarNode*>()); // Initialize NearestNeighbors structure
   _nn.reset(new ompl::NearestNeighborsGNAT<HolonomicRRTstarNode*>()); // Initialize NearestNeighbors structure
-  _nn->setDistanceFunction(boost::bind(&HolonomicRRTstar::distance, this, _1, _2));
+	_nn->setDistanceFunction(std::bind(&HolonomicRRTstar::distance, this, _1, _2));
   _nn->add(start_node);
 
   _collision_detection_count = _collision_detection_time = _near_neighbor_search_time = 0;
