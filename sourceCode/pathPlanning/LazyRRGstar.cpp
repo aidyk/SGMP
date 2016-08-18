@@ -66,7 +66,8 @@ using namespace std::placeholders;
 #define DYNAMIC
 #define TIME
 #define ONCE
-#define ANN
+// #define ANN
+// #define MYNN
 #define KNN
 #define VIS
 
@@ -422,12 +423,29 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 #ifdef TIME
 		if (_simGetTimeDiffInMs(initTime) >= break_point) {
 			float bc = _goal_node->getCost();
-			fprintf(tfp, "%f\t%d\t%d\t%d\t%d\n", bc, _collision_detection_count, _dynamic_increase_count,
+			fprintf(tfp, "%f\t%d\t%d\t%d\t%d\t%d\t%d\n", bc, _collision_detection_count, _dynamic_increase_count,
 							_collision_detection_time, _dynamic_increase_time, _dynamic_decrease_time, _near_neighbor_search_time);
 			break_point += 1000;
 		}
 #endif
 
+#ifdef MYNN
+		/*
+		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
+		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
+		values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
+
+		C4Vector d;
+		d.buildRandomOrientation();
+		values[3] = d(0);
+		values[4] = d(1);
+		values[5] = d(2);
+		values[6] = d(3);
+		*/
+
+		SIM_RAN
+
+#else
     randNode->reSample(planningType, _searchMinVal, _searchRange);
 #ifdef TIME
     int elapsed_time = simGetSystemTimeInMs(-1);
@@ -445,6 +463,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
     if (dist > _ballRadiusConst * _maxDistance) {
       randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
     }
+#endif
 
     LazyRRGstarNode* extended = randNode->copyYourself(); // Hm...
     std::vector<LazyRRGstarNode*> neighbors;
@@ -452,7 +471,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
     elapsed_time = simGetSystemTimeInMs(-1);
 #endif
 #ifdef KNN
-    _nn->nearestK(extended, getNearNeighborRadius(), neighbors);
+		_nn->nearestK(extended, (size_t)getNearNeighborRadius(), neighbors);
 #else
     _nn->nearestR(extended, fmin(getNearNeighborRadius(), _maxDistance), neighbors);
 #endif
@@ -485,7 +504,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
       }
 #endif
 
-      // ChoosParent
+			// ChooseParent
       if (neighbors[i]->getCost() + artificialCost < extended->getCost()) {
         extended->pred = neighbors[i];
         extended->setCost(neighbors[i]->getCost() + artificialCost);
@@ -852,6 +871,7 @@ bool LazyRRGstar::setPartialPath() {
   printf("DD : %d // DI : %d\n", _dynamic_decrease_count, _dynamic_increase_count);
   printf("Final solution cost : %f\n", _best_cost);
   printf("Collision Detection : %d\n", _collision_detection_count);
+	printf("K-nn : %d\n", (int)getNearNeighborRadius());
 
   FILE *ofp = NULL;
   char file_name[256] = "LazyRRGstar";
@@ -981,18 +1001,18 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
                                          bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost) {
   // Return value is != NULL if extention was performed and connect is false
   // If connect is true, then return value indicates that connection can be performed!
-  LazyRRGstarNode* extended = from->copyYourself();
+#ifdef TIME
+	int elapsed_time = simGetSystemTimeInMs(-1);
+#endif
+	LazyRRGstarNode* extended = from->copyYourself();
 	float theVect[7] = {0.0, };
 	int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
 
 #ifndef DYNAMIC
 	_skipped_collision_detection_count += passes;
   artificialCost = distance(from, to);
-  return extended;
-#endif
-
-#ifdef TIME
-  int elapsed_time = simGetSystemTimeInMs(-1);
+	_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+	return extended;
 #endif
 
   int currentPass;

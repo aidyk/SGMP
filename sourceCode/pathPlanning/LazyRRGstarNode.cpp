@@ -52,7 +52,7 @@ LazyRRGstarNode::LazyRRGstarNode(const C4Vector& rotAxisRot, const C4Vector& rot
   color = 0; // White
   pred = witness = NULL;
   is_collision_free = false;
-  free_radius = 0.0f;
+	free_radius = SIM_MAX_FLOAT;
 }
 
 LazyRRGstarNode::LazyRRGstarNode(int theType, const C7Vector& conf, const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
@@ -62,7 +62,7 @@ LazyRRGstarNode::LazyRRGstarNode(int theType, const C7Vector& conf, const C4Vect
   color = 0;
   pred = witness = NULL;
   is_collision_free = false;
-  free_radius = 0.0f;
+	free_radius = SIM_MAX_FLOAT;
 }
 
 LazyRRGstarNode::LazyRRGstarNode(int theType, float searchMin[4], float searchRange[4],
@@ -73,7 +73,7 @@ const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
   color = 0;
   pred = witness = NULL;
   is_collision_free = false;
-  free_radius = 0.0f;
+	free_radius = SIM_MAX_FLOAT;
 }
 
 LazyRRGstarNode::~LazyRRGstarNode() {
