@@ -71,7 +71,8 @@ public:
   bool setPartialPath();
   void getSearchTreeData(std::vector<float>& data, bool fromStart);
 
-  float getNearNeighborRadius(void);
+	float getSamplingRadius(void);
+	float getNearNeighborRadius(void);
 
   // <Set/Getters
   void setGoalBias(float goalBias) { _goalBias = goalBias; }
@@ -103,6 +104,7 @@ private:
   bool gotPotential(LazyRRGstarNode* it);
 
 	std::shared_ptr<ompl::NearestNeighbors<LazyRRGstarNode*> > _nn;
+	std::vector<LazyRRGstarNode*> _configurations;
 
   float _kConstant;
   // <RRG controllable parameters
@@ -114,6 +116,8 @@ private:
   LazyRRGstarNode* _start_node;
   LazyRRGstarNode* _goal_node;
   float _best_cost;
+	float _dimension;
+	std::vector<int> _nn_cache;
 
   // <For evaluation
   int _skipped_collision_detection_count;

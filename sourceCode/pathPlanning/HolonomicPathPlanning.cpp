@@ -69,10 +69,8 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
     fprintf(stderr, "setting.cfg successfully loaded.");
   }
 
-  char planner_type[16], option_type[32];
+	char planner_type[32], option_type[32];
   float option_value;
-  // constructor_table[0] =
-  // constructor_table[1]
 
   fscanf(aux_fp, "%s", planner_type);
   if (!strcmp(planner_type, "RRT")) { // Naive RRT
@@ -150,6 +148,9 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
 		} else if (!strcmp(option_type, "maxTimebudget")) {
 			ptrPlanner->setMaxTimebudget(option_value);
 			printf("%s : %f\n", option_type, option_value);
+		} else if (!strcmp(option_type, "rewireFactor")) {
+			ptrPlanner->setRewireFactor(option_value);
+			printf("%s : %f\n", option_type, option_value);
 		} else {
       fprintf(stderr, "Invalid option, %s : %f\n", option_type, option_value);
     }
@@ -188,6 +189,10 @@ void CHolonomicPathPlanning::setMaxDistance(float value) {
 
 void CHolonomicPathPlanning::setMaxTimebudget(float value) {
 	_maxTimebudget = value;
+}
+
+void CHolonomicPathPlanning::setRewireFactor(float value) {
+	_rewireFactor = value;
 }
 
 bool CHolonomicPathPlanning::setPartialPath() {

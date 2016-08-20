@@ -68,7 +68,8 @@ public:
   virtual void setGoalBias(float value);
   virtual void setMaxDistance(float value);
 	virtual void setMaxTimebudget(float value);
-  virtual bool setPartialPath();
+	virtual void setRewireFactor(float value);
+	virtual bool setPartialPath();
   virtual int smoothFoundPath(int steps,int maxTimePerPass);
   virtual void getPathData(std::vector<float>& data);
   virtual int getVector(CHolonomicPathNode* fromPoint, CHolonomicPathNode* toPoint,float vect[7],float e,float& artificialLength,bool dontDivide);
@@ -113,7 +114,6 @@ protected:
 
   // <For evaluation
   int _collision_detection_count;
-	float _maxTimebudget;
   // >
 
   std::vector<int> foundPathSameStraightLineID_forSteppedSmoothing;
@@ -123,6 +123,9 @@ protected:
   // paper; Completely randomized RRT-connect proposed by D Schneider, ICRA2015
   float _goalBias;
   float _maxDistance;
+	// >
+	float _maxTimebudget;
+	float _rewireFactor;
 
   CHolonomicPathPlanning* ptrPlanner;
   CHolonomicPathPlanning* (*constructor_table[10]) (int theStartDummyID, int theGoalDummyID,

@@ -78,7 +78,8 @@ public:
   float getCost() { return _cost; }
 
   void addChild(LazyRRGstarNode* node) { _children.push_back(node); }
-  void addNode(LazyRRGstarNode* node, float cost) { _edges.push_back(Edge(node, cost)); }
+	void addNode(LazyRRGstarNode* node, float cost);
+	void addNearNeighbors(LazyRRGstarNode* node, float cost);
   void removeNode(LazyRRGstarNode* node);
   void removeChild(LazyRRGstarNode* node) { // Can be optimized by storing index on child side.
     for (unsigned int i = 0; i < _children.size(); i++) if (_children[i] == node){
@@ -90,6 +91,7 @@ public:
   void updateWitness(float dist, LazyRRGstarNode* witness);
 
   std::vector<Edge>& edges() { return _edges; }
+	std::vector<Edge>& nn() { return _nn; }
   std::vector<LazyRRGstarNode*>& children() { return _children; }
 
   bool isCollisionFree() { return is_collision_free; }
@@ -99,9 +101,12 @@ public:
   LazyRRGstarNode* pred;
 
   // A*
+	/*
   float f;
   float d;
-  int color; // Also for lazy RRG*
+	*/
+	int color; // Also for lazy RRG*
+	int index;
 
   bool is_collision_free; // It means a connection (parent -> this) is collision free.
 
@@ -111,10 +116,13 @@ public:
   // >
 
   // Increasing order for priority queue
+	/*
   bool operator < (const LazyRRGstarNode& node) const {
     return this->f > node.f;
   }
+	*/
   std::vector<Edge> _edges;
+	std::vector<Edge> _nn;
   std::vector<LazyRRGstarNode*> _children;
 
 private:

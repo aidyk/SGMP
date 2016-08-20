@@ -48,6 +48,7 @@
 #include <functional>
 #include <memory>
 #include <queue>
+#include <random>
 
 #include "LazyRRGstar.h"
 #include "pathPlanningInterface.h"
@@ -59,6 +60,7 @@
 using namespace std::placeholders;
 
 #define CONST_E 2.718281828
+#define CONST_PI 3.14159265358979
 
 // #define RRG
 
@@ -67,8 +69,9 @@ using namespace std::placeholders;
 #define TIME
 #define ONCE
 // #define ANN
-// #define MYNN
-#define KNN
+#define MYNN
+// #define KNN // if MYNN is enabled, disabled.
+#define NN_CACHE
 #define VIS
 
 LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
@@ -142,18 +145,30 @@ LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
 	// _nn.reset(new ompl::NearestNeighborsLinear<LazyRRGstarNode*>()); // Initialize NearestNeighbors structure
 #endif
 	_nn->setDistanceFunction((std::bind(&LazyRRGstar::distance, this, _1, _2)));
-  _nn->add(_start_node);
-  _nn->add(_goal_node);
 
-  // Set ballRadiusMax and ballRadiusConst to maximum extent
-  _ballRadiusMax = _ballRadiusConst = sqrt(_searchRange[0] * _searchRange[0] + _searchRange[1] * _searchRange[1] + _searchRange[2] * _searchRange[2]);
-  _best_cost = SIM_MAX_FLOAT;
+#ifdef MYNN
+	_start_node->index =  _configurations.size();
+	_configurations.push_back(_start_node);
+	_goal_node->index =  _configurations.size();
+	_configurations.push_back(_goal_node);
 
-  _kConstant = CONST_E + CONST_E / 3.0;
+	_start_node->addNearNeighbors(_goal_node, distance(_start_node, _goal_node));
+	_goal_node->addNearNeighbors(_start_node, distance(_goal_node, _start_node));
+
+	_nn_cache.reserve(1000000);
+	for (int i = 0; i < _nn_cache.size(); i++) {
+		_nn_cache[i] = 0;
+	}
+#else
+	_nn->add(_start_node);
+	_nn->add(_goal_node);
+#endif
+
+	_best_cost = SIM_MAX_FLOAT;
 
   // Initialize distance to the nearest collision-free space to MAX
-  _start_node->free_radius = _ballRadiusMax;
-  _goal_node->free_radius = _ballRadiusMax;
+	_start_node->free_radius = SIM_MAX_FLOAT;
+	_goal_node->free_radius = SIM_MAX_FLOAT;
 
   _collision_detection_count = _skipped_collision_detection_count = 0;
   _dynamic_decrease_count = _dynamic_increase_count = 0;
@@ -186,6 +201,11 @@ LazyRRGstar::~LazyRRGstar() {
   }
 }
 
+
+float LazyRRGstar::getSamplingRadius() {
+	return _ballRadiusConst * pow(log(1.0 + _configurations.size()) / (1.0 + _configurations.size()), 1.0 / _dimension);
+}
+
 float LazyRRGstar::getNearNeighborRadius() {
   // return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + fromStart.size()) / (1.0 + fromStart.size()), 0.33));
     //if (planningType == sim_holonomicpathplanning_xyzabg) {
@@ -194,7 +214,7 @@ float LazyRRGstar::getNearNeighborRadius() {
 #ifdef KNN
   return ceil(log(1.0 + _nn->size()) * _kConstant);
 #else
-  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.3333));
+	return _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 1.0 / _dimension);
 #endif
   //}
 }
@@ -246,8 +266,12 @@ bool cmpVis(LazyRRGstarNode* a, LazyRRGstarNode* b) {
 }
 
 void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart) {
+#ifdef MYNN
+	std::vector<LazyRRGstarNode*> cont = _configurations;
+#else
 	std::vector<LazyRRGstarNode*> cont;
 	_nn->list(cont);
+#endif
 
 	if (fromTheStart) {
 		if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
@@ -294,14 +318,18 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 	} else { // !fromTheStart - Blue-colored
 
 #ifdef VIS
+#ifdef MYNN
+		std::vector<LazyRRGstarNode*> node_list = _configurations;
+#else
 		std::vector<LazyRRGstarNode*> node_list;
 		_nn->list(node_list);
+#endif
 
 		std::sort(node_list.begin(), node_list.end(), cmpVis);
 
-		float ambient_color[3] = {1.0, 1.0, 1.0}, dynamic_color[3];
+		float ambient_color[3] = {1.0, 1.0, 1.0};
 		simInt point_container = simAddDrawingObject(sim_drawing_points + sim_drawing_itemcolors + sim_drawing_overlay
-																								 , 4, 0.01, -1, 1000000, NULL, NULL, NULL, NULL);
+																								 , 4, 0.0, -1, 1000000, NULL, NULL, NULL, NULL);
 		for (unsigned int i = 0; i < node_list.size(); i++) {
 			LazyRRGstarNode* it = node_list[i];
 			// The closer, the brighter.
@@ -392,7 +420,43 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
   printf("stepSize : %f\n", stepSize);
   printf("angularCoeff : %f\n", angularCoeff);
 
-  // maxTimePerPass is in miliseconds
+	float spaceMeasure = 1.f;
+	if (planningType == sim_holonomicpathplanning_xy) {
+		_dimension = 2.f;
+		spaceMeasure *= _searchRange[0];
+		spaceMeasure *= _searchRange[1];
+	} else if (planningType == sim_holonomicpathplanning_xyz) {
+		_dimension = 3.f;
+		spaceMeasure *= _searchRange[0];
+		spaceMeasure *= _searchRange[1];
+		spaceMeasure *= _searchRange[2];
+	} else if (planningType == sim_holonomicpathplanning_xyg) {
+		_dimension = 3.f;
+		spaceMeasure *= _searchRange[0];
+		spaceMeasure *= _searchRange[1];
+		spaceMeasure *= angularCoeff * 2.0 * CONST_PI;
+	} else if (planningType == sim_holonomicpathplanning_xyzabg) {
+		_dimension = 6.f;
+		spaceMeasure *= _searchRange[0];
+		spaceMeasure *= _searchRange[1];
+		spaceMeasure *= _searchRange[2];
+		spaceMeasure *= _searchRange[3];
+		spaceMeasure *= angularCoeff * CONST_PI * CONST_PI;
+	}
+
+	float unitNBallMeasure = std::pow(sqrt(CONST_PI), _dimension) / (std::tgamma(static_cast<double>(_dimension) / 2.0 + 1.0));
+
+	// r_rrg > 2*(1+1/d)^(1/d)*(measure/ballvolume)^(1/d)
+	_ballRadiusConst = _rewireFactor * 2.0 * std::pow((1.0 + 1.0/_dimension) * (spaceMeasure / unitNBallMeasure), 1.0 / _dimension);
+
+	// k_rrg > e+e/d.
+	_kConstant = _rewireFactor * (CONST_E + CONST_E / _dimension);
+
+	puts("");
+	printf("rConstant :%f \nkConstant : %f\n", _ballRadiusConst, _kConstant);
+	printf("Initial sampling_radius : %f \tInitial distance %f\n", getSamplingRadius(), distance(_start_node, _goal_node));
+
+	// maxTimePerPass is in miliseconds
   if (invalidData)
     return(0);
   if (foundPath.size() != 0)
@@ -412,7 +476,6 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 
   if (maxTimePerPass == 131183)
     return(61855195);
-  maxTimePerPass = 10000;
 
   int foundAPath = 0;
   int initTime = simGetSystemTimeInMs(-1);
@@ -429,40 +492,48 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 		}
 #endif
 
+		float artificialCost;
+		int elapsed_time;
 #ifdef MYNN
-		/*
-		values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
-		values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-		values[2] = searchMin[2] + searchRange[2] * SIM_RAND_FLOAT;
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_int_distribution<uint> dis(0, UINT32_MAX);
+		LazyRRGstarNode *sampled = _configurations[dis(gen) % _configurations.size()];
+		float search_radius = getSamplingRadius();
 
-		C4Vector d;
-		d.buildRandomOrientation();
-		values[3] = d(0);
-		values[4] = d(1);
-		values[5] = d(2);
-		values[6] = d(3);
-		*/
+		if (planningType == sim_holonomicpathplanning_xyg) {
+			for (unsigned int i = 0; i < 2; i++) {
+				randNode->values[i] = _searchMinVal[i] + _searchRange[i] * SIM_RAND_FLOAT;
+			}
+			randNode->values[2] = CPathPlanningInterface::getNormalizedAngle(_searchMinVal[3] + _searchRange[3] * SIM_RAND_FLOAT);
 
-		SIM_RAN
+			float dist_to_sampled = distance(sampled, randNode);
+			if (dist_to_sampled > search_radius) {
+				randNode->interpolate(sampled, search_radius, angularCoeff);
+			}
+		}
 
+		if (!isFree(randNode, startDummy)) continue;
 #else
     randNode->reSample(planningType, _searchMinVal, _searchRange);
+
 #ifdef TIME
-    int elapsed_time = simGetSystemTimeInMs(-1);
+		elapsed_time = simGetSystemTimeInMs(-1);
 #endif
     LazyRRGstarNode* closest = _nn->nearest(randNode);
 #ifdef TIME
     _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
-    float artificialCost;
     assert(closest != NULL); // Impossible!
 
     if (!isFree(randNode, startDummy)) continue;
 
-    float dist = distance(randNode, closest);
+		/*
+		float dist = distance(randNode, closest);
     if (dist > _ballRadiusConst * _maxDistance) {
       randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
     }
+		*/
 #endif
 
     LazyRRGstarNode* extended = randNode->copyYourself(); // Hm...
@@ -470,12 +541,76 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 #ifdef TIME
     elapsed_time = simGetSystemTimeInMs(-1);
 #endif
+
+#ifdef MYNN
+		// Find near neighbors of new configuration from
+		// near neighbor of sampled configuration in G.
+		// Also lazyily update r-neighbors.
+		neighbors.push_back(sampled); // Maybe not needed.
+#ifdef NN_CACHE
+		_nn_cache[sampled->index] = _configurations.size();
+#endif
+		std::vector<LazyRRGstarNode::Edge> &nn = sampled->nn();
+		for (int i = 0; i < (int)nn.size(); i++) {
+			LazyRRGstarNode *neighbor = nn[i].node();
+			float dist_to_neighbor = nn[i].cost();
+
+			if (dist_to_neighbor > search_radius) {
+				swap(nn[i], nn.back());
+				i -= 1;
+				nn.pop_back();
+				continue;
+			} else {
+				if (distance(neighbor, randNode) < search_radius) {
+					neighbors.push_back(neighbor);
+				}
+#ifdef NN_CACHE
+				_nn_cache[neighbor->index] = _configurations.size();
+#endif
+			}
+		}
+
+		for (int i = 0; i < (int)nn.size(); i++) {
+			LazyRRGstarNode *neighbor = nn[i].node();
+			std::vector<LazyRRGstarNode::Edge> &mm = neighbor->nn();
+			for (int j = 0; j < (int)mm.size(); j++) {
+				LazyRRGstarNode *neneighbor = mm[j].node();
+				float dist_to_neneighbor = mm[j].cost();
+
+				if (dist_to_neneighbor > search_radius) {
+					swap(mm[j], mm.back());
+					j -= 1;
+					mm.pop_back();
+					continue;
+#ifdef NN_CACHE
+				} else if (_nn_cache[neneighbor->index] != _configurations.size()) {
+					if (distance(neneighbor, randNode) < search_radius)
+						neighbors.push_back(neneighbor);
+					_nn_cache[neneighbor->index] = _configurations.size();
+				}
+#else
+
+				} else if (distance(neneighbor, randNode) < search_radius)
+					neighbors.push_back(neneighbor);
+#endif
+			}
+		}
+
+#ifndef NN_CACHE
+		sort(neighbors.begin(), neighbors.end());
+		neighbors.erase(unique(neighbors.begin(), neighbors.end()), neighbors.end());
+#endif
+		extended->index = _configurations.size();
+		_configurations.push_back(extended);
+#else
+
 #ifdef KNN
 		_nn->nearestK(extended, (size_t)getNearNeighborRadius(), neighbors);
 #else
-    _nn->nearestR(extended, fmin(getNearNeighborRadius(), _maxDistance), neighbors);
+		_nn->nearestR(extended, getNearNeighborRadius(), neighbors);
 #endif
-    _nn->add(extended);
+		_nn->add(extended);
+#endif
 #ifdef TIME
     _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
@@ -490,8 +625,12 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
       // dummy ignored
 
       if (dummy == NULL) continue;
-      extended->addNode(neighbors[i], artificialCost);
-      neighbors[i]->addNode(extended, artificialCost);
+#ifdef MYNN
+			extended->addNearNeighbors(neighbors[i], artificialCost);
+			neighbors[i]->addNearNeighbors(extended, artificialCost);
+#endif
+			extended->addNode(neighbors[i], artificialCost);
+			neighbors[i]->addNode(extended, artificialCost);
 
 #ifdef DYNAMIC
 			if (neighbors[i]->witness != NULL) {
@@ -770,6 +909,7 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
   // increasing is_white variable.
 }
 
+/*
 // Return best solution path in the current roadmap using traditional A* algorithm.
 float LazyRRGstar::getBestSolutionPath(LazyRRGstarNode* goal_node) {
   priority_queue<LazyRRGstarNode*> pq;
@@ -818,6 +958,7 @@ float LazyRRGstar::getBestSolutionPath(LazyRRGstarNode* goal_node) {
   reverse(foundPath.begin(), foundPath.end());
   return 1.0;
 }
+*/
 
 // Return true if 'it' can be part of new best solution.
 bool LazyRRGstar::gotPotential(LazyRRGstarNode* it) {
@@ -851,10 +992,14 @@ void LazyRRGstar::getPathData(std::vector<float>& data) {
 }
 
 bool LazyRRGstar::setPartialPath() {
-  printf("%lu\n", _nn->size());
-
-  vector<LazyRRGstarNode*> nodes;
+#ifdef MYNN
+	printf("%lu\n", _configurations.size());
+	vector<LazyRRGstarNode*> nodes = _configurations;
+#else
+	printf("%lu\n", _nn->size());
+	vector<LazyRRGstarNode*> nodes;
   _nn->list(nodes);
+#endif
 
   int sum_degree = 0;
   for (unsigned int i = 0; i < nodes.size(); i++) {
@@ -871,7 +1016,8 @@ bool LazyRRGstar::setPartialPath() {
   printf("DD : %d // DI : %d\n", _dynamic_decrease_count, _dynamic_increase_count);
   printf("Final solution cost : %f\n", _best_cost);
   printf("Collision Detection : %d\n", _collision_detection_count);
-	printf("K-nn : %d\n", (int)getNearNeighborRadius());
+	printf("knn radius : %d\n", (int)getNearNeighborRadius());
+	printf("rnn radius : %f\n", getSamplingRadius());
 
   FILE *ofp = NULL;
   char file_name[256] = "LazyRRGstar";
@@ -888,9 +1034,15 @@ bool LazyRRGstar::setPartialPath() {
     exit(1);
   }
 
-  fprintf(ofp, "%lu\t%f\t%d\t%d\t%d\t%d",
+#ifdef MYNN
+	fprintf(ofp, "%lu\t%f\t%d\t%d\t%d\t%d",
+					_configurations.size(), _best_cost, _collision_detection_count, _skipped_collision_detection_count,
+					_dynamic_decrease_count, _dynamic_increase_count);
+#else
+	fprintf(ofp, "%lu\t%f\t%d\t%d\t%d\t%d",
           _nn->size(), _best_cost, _collision_detection_count, _skipped_collision_detection_count,
           _dynamic_decrease_count, _dynamic_increase_count);
+#endif
 #ifdef TIME
   fprintf(ofp, "\t%f\t%f\t%f\t%f\t%f\t",
           sum_degree / (double)nodes.size(), _collision_detection_time / 1000.0f, _dynamic_decrease_time / 1000.0f,

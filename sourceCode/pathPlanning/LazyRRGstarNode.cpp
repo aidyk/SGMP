@@ -48,8 +48,7 @@
 LazyRRGstarNode::LazyRRGstarNode(const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
   : CHolonomicPathNode(rotAxisRot, rotAxisRotInv) {
   _cost = SIM_MAX_FLOAT;
-  f = d = SIM_MAX_FLOAT;
-  color = 0; // White
+	color = 0; // White
   pred = witness = NULL;
   is_collision_free = false;
 	free_radius = SIM_MAX_FLOAT;
@@ -58,8 +57,7 @@ LazyRRGstarNode::LazyRRGstarNode(const C4Vector& rotAxisRot, const C4Vector& rot
 LazyRRGstarNode::LazyRRGstarNode(int theType, const C7Vector& conf, const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
   : CHolonomicPathNode(theType, conf, rotAxisRot, rotAxisRotInv) {
   _cost = SIM_MAX_FLOAT;
-  f = d = SIM_MAX_FLOAT;
-  color = 0;
+	color = 0;
   pred = witness = NULL;
   is_collision_free = false;
 	free_radius = SIM_MAX_FLOAT;
@@ -69,8 +67,7 @@ LazyRRGstarNode::LazyRRGstarNode(int theType, float searchMin[4], float searchRa
 const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
 : CHolonomicPathNode(theType, searchMin, searchRange, rotAxisRot, rotAxisRotInv) {
   _cost = SIM_MAX_FLOAT;
-  f = d = SIM_MAX_FLOAT;
-  color = 0;
+	color = 0;
   pred = witness = NULL;
   is_collision_free = false;
 	free_radius = SIM_MAX_FLOAT;
@@ -87,6 +84,14 @@ LazyRRGstarNode* LazyRRGstarNode::copyYourself() {
   for (int i = 0; i < s; i++)
     newNode->values[i] = values[i];
   return(newNode);
+}
+
+void LazyRRGstarNode::addNode(LazyRRGstarNode* node, float cost) {
+	_edges.push_back(Edge(node, cost));
+}
+
+void LazyRRGstarNode::addNearNeighbors(LazyRRGstarNode *node, float cost){
+	_nn.push_back(Edge(node, cost));
 }
 
 void LazyRRGstarNode::removeNode(LazyRRGstarNode *node) {

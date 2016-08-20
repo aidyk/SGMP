@@ -115,7 +115,7 @@ void CHolonomicPathNode::reSample(int theType, float searchMin[4], float searchR
   } else if (theType == sim_holonomicpathplanning_xyg) {
     values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
     values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
-    values[2] = CPathPlanningInterface::getNormalizedAngle(searchMin[3] + searchRange[3] * SIM_RAND_FLOAT);
+		values[2] = CPathPlanningInterface::getNormalizedAngle(searchMin[3] + searchRange[3] * SIM_RAND_FLOAT);
   } else if (theType == sim_holonomicpathplanning_xyzabg) {
     values[0] = searchMin[0] + searchRange[0] * SIM_RAND_FLOAT;
     values[1] = searchMin[1] + searchRange[1] * SIM_RAND_FLOAT;
