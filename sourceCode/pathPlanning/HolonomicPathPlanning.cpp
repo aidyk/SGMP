@@ -483,6 +483,7 @@ int CHolonomicPathPlanning::getVector(CHolonomicPathNode *fromPoint, CHolonomicP
 int CHolonomicPathPlanning::smoothFoundPath(int steps, int maxTimePerPass) {
   // step specifies the number of passes (each pass is composed by a calculated sub-pass, and some random sub-pass)
   // We first copy foundPath:
+	return(1);
   if (steps < 2)
     return(1);
   if (invalidData)

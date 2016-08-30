@@ -65,14 +65,16 @@ using namespace std::placeholders;
 // #define RRG
 
 #define CACHING
-#define DYNAMIC
+// #define DYNAMIC
 #define TIME
 #define ONCE
 // #define ANN
-#define MYNN
-// #define KNN // if MYNN is enabled, disabled.
+// #define MYNN
+#define PRUNING_V
+#define KNN // if MYNN is enabled, disabled.
 #define NN_CACHE
 #define VIS
+#define TREE_VIS
 
 LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
                                int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
@@ -202,8 +204,8 @@ LazyRRGstar::~LazyRRGstar() {
 }
 
 
-float LazyRRGstar::getSamplingRadius() {
-	return _ballRadiusConst * pow(log(1.0 + _configurations.size()) / (1.0 + _configurations.size()), 1.0 / _dimension);
+float LazyRRGstar::getNearNeighborK() {
+	return ceil(_kConstant * log(1.0 + _nn->size()));
 }
 
 float LazyRRGstar::getNearNeighborRadius() {
@@ -211,11 +213,7 @@ float LazyRRGstar::getNearNeighborRadius() {
     //if (planningType == sim_holonomicpathplanning_xyzabg) {
     //  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.1666));
     //} else {
-#ifdef KNN
-  return ceil(log(1.0 + _nn->size()) * _kConstant);
-#else
 	return _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 1.0 / _dimension);
-#endif
   //}
 }
 
@@ -271,6 +269,10 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 #else
 	std::vector<LazyRRGstarNode*> cont;
 	_nn->list(cont);
+#endif
+
+#ifndef TREE_VIS
+	return;
 #endif
 
 	if (fromTheStart) {
@@ -443,6 +445,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 		spaceMeasure *= _searchRange[3];
 		spaceMeasure *= angularCoeff * CONST_PI * CONST_PI;
 	}
+	spaceMeasure = sqrt(spaceMeasure);
 
 	float unitNBallMeasure = std::pow(sqrt(CONST_PI), _dimension) / (std::tgamma(static_cast<double>(_dimension) / 2.0 + 1.0));
 
@@ -454,7 +457,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 
 	puts("");
 	printf("rConstant :%f \nkConstant : %f\n", _ballRadiusConst, _kConstant);
-	printf("Initial sampling_radius : %f \tInitial distance %f\n", getSamplingRadius(), distance(_start_node, _goal_node));
+	printf("Initial sampling_radius : %f \tInitial distance %f\n", getNearNeighborRadius(), distance(_start_node, _goal_node));
 
 	// maxTimePerPass is in miliseconds
   if (invalidData)
@@ -516,6 +519,11 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 		if (!isFree(randNode, startDummy)) continue;
 #else
     randNode->reSample(planningType, _searchMinVal, _searchRange);
+
+#ifdef PRUNING_V
+		if (_best_cost <= distance(_start_node, randNode) + distance(randNode, _goal_node))
+			continue;
+#endif
 
 #ifdef TIME
 		elapsed_time = simGetSystemTimeInMs(-1);
@@ -605,7 +613,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 #else
 
 #ifdef KNN
-		_nn->nearestK(extended, (size_t)getNearNeighborRadius(), neighbors);
+		_nn->nearestK(extended, (size_t)getNearNeighborK(), neighbors);
 #else
 		_nn->nearestR(extended, getNearNeighborRadius(), neighbors);
 #endif
@@ -971,8 +979,10 @@ bool LazyRRGstar::gotPotential(LazyRRGstarNode* it) {
 
 void LazyRRGstar::getPathData(std::vector<float>& data) {
   data.clear();
+
   if (invalidData)
     return;
+
   for (int i = 0; i < int(foundPath.size()); i++) {
     LazyRRGstarNode* theNode = static_cast<LazyRRGstarNode*>(foundPath[i]);
     C3Vector p;
@@ -988,7 +998,8 @@ void LazyRRGstar::getPathData(std::vector<float>& data) {
     data.push_back(conf(4));
     data.push_back(conf(5));
     data.push_back(conf(6));
-  }
+
+	}
 }
 
 bool LazyRRGstar::setPartialPath() {
@@ -1016,8 +1027,8 @@ bool LazyRRGstar::setPartialPath() {
   printf("DD : %d // DI : %d\n", _dynamic_decrease_count, _dynamic_increase_count);
   printf("Final solution cost : %f\n", _best_cost);
   printf("Collision Detection : %d\n", _collision_detection_count);
-	printf("knn radius : %d\n", (int)getNearNeighborRadius());
-	printf("rnn radius : %f\n", getSamplingRadius());
+	printf("knn radius : %f\n", getNearNeighborK());
+	printf("rnn radius : %f\n", getNearNeighborRadius());
 
   FILE *ofp = NULL;
   char file_name[256] = "LazyRRGstar";

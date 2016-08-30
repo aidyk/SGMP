@@ -71,7 +71,7 @@ public:
   bool setPartialPath();
   void getSearchTreeData(std::vector<float>& data, bool fromStart);
 
-	float getSamplingRadius(void);
+	float getNearNeighborK(void);
 	float getNearNeighborRadius(void);
 
   // <Set/Getters
@@ -104,7 +104,6 @@ private:
   bool gotPotential(LazyRRGstarNode* it);
 
 	std::shared_ptr<ompl::NearestNeighbors<LazyRRGstarNode*> > _nn;
-	std::vector<LazyRRGstarNode*> _configurations;
 
   float _kConstant;
   // <RRG controllable parameters
