@@ -48,7 +48,7 @@
 LazyRRGstarNode::LazyRRGstarNode(const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
   : CHolonomicPathNode(rotAxisRot, rotAxisRotInv) {
   _cost = SIM_MAX_FLOAT;
-	color = 0; // White
+	depth = color = 0; // White
   pred = witness = NULL;
   is_collision_free = false;
 	// free_radius = SIM_MAX_FLOAT;
@@ -58,7 +58,7 @@ LazyRRGstarNode::LazyRRGstarNode(const C4Vector& rotAxisRot, const C4Vector& rot
 LazyRRGstarNode::LazyRRGstarNode(int theType, const C7Vector& conf, const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
   : CHolonomicPathNode(theType, conf, rotAxisRot, rotAxisRotInv) {
   _cost = SIM_MAX_FLOAT;
-	color = 0;
+	depth = color = 0;
   pred = witness = NULL;
   is_collision_free = false;
 	// free_radius = SIM_MAX_FLOAT;
@@ -69,7 +69,7 @@ LazyRRGstarNode::LazyRRGstarNode(int theType, float searchMin[4], float searchRa
 const C4Vector& rotAxisRot, const C4Vector& rotAxisRotInv)
 : CHolonomicPathNode(theType, searchMin, searchRange, rotAxisRot, rotAxisRotInv) {
   _cost = SIM_MAX_FLOAT;
-	color = 0;
+	depth = color = 0;
   pred = witness = NULL;
   is_collision_free = false;
 	// free_radius = SIM_MAX_FLOAT;

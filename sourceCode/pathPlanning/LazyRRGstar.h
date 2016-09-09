@@ -95,6 +95,7 @@ private:
                       bool shouldBeConnected, CDummyDummy* dummy, float &artificialCost);
   LazyRRGstarNode* slerp(LazyRRGstarNode*, LazyRRGstarNode*, float t);
   bool isFree(LazyRRGstarNode*, CDummyDummy *dummy);
+	bool shouldBeLazy(LazyRRGstarNode* from, LazyRRGstarNode* to);
 
   void DynamicShortestPathUpdate(CDummyDummy* startDummy);
   void DynamicDecrease(LazyRRGstarNode *node);
@@ -105,10 +106,10 @@ private:
 
 	std::shared_ptr<ompl::NearestNeighbors<LazyRRGstarNode*> > _nn;
 
-  float _kConstant;
-  // <RRG controllable parameters
-  float _ballRadiusConst;
-  float _ballRadiusMax;
+	// <RRG controllable parameters
+	float _kConstant;
+	float _rConstant;
+	float _ballRadiusMax;
   float _goalBias;
   float _maxDistance;
   // >
@@ -117,6 +118,7 @@ private:
   float _best_cost;
 	float _dimension;
 	std::vector<int> _nn_cache;
+	std::vector<int> _depth_table;
 
   // <For evaluation
   int _skipped_collision_detection_count;

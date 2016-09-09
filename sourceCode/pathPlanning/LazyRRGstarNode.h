@@ -107,6 +107,7 @@ public:
 	*/
 	int color; // Also for lazy RRG*
 	int index;
+	int depth;
 
   bool is_collision_free; // It means a connection (parent -> this) is collision free.
 

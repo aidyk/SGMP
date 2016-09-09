@@ -151,6 +151,9 @@ CHolonomicPathPlanning::CHolonomicPathPlanning(int theStartDummyID, int theGoalD
 		} else if (!strcmp(option_type, "rewireFactor")) {
 			ptrPlanner->setRewireFactor(option_value);
 			printf("%s : %f\n", option_type, option_value);
+		} else if (!strcmp(option_type, "subtreeThreshold")) {
+			ptrPlanner->setSubtreeThreshold(option_value);
+			printf("%s : %f\n", option_type, option_value);
 		} else {
       fprintf(stderr, "Invalid option, %s : %f\n", option_type, option_value);
     }
@@ -193,6 +196,10 @@ void CHolonomicPathPlanning::setMaxTimebudget(float value) {
 
 void CHolonomicPathPlanning::setRewireFactor(float value) {
 	_rewireFactor = value;
+}
+
+void CHolonomicPathPlanning::setSubtreeThreshold(float value) {
+	_subtreeThreshold = value;
 }
 
 bool CHolonomicPathPlanning::setPartialPath() {

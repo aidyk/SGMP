@@ -69,6 +69,7 @@ public:
   virtual void setMaxDistance(float value);
 	virtual void setMaxTimebudget(float value);
 	virtual void setRewireFactor(float value);
+	virtual void setSubtreeThreshold(float value);
 	virtual bool setPartialPath();
   virtual int smoothFoundPath(int steps,int maxTimePerPass);
   virtual void getPathData(std::vector<float>& data);
@@ -126,6 +127,7 @@ protected:
 	// >
 	float _maxTimebudget;
 	float _rewireFactor;
+	float _subtreeThreshold;
 
   CHolonomicPathPlanning* ptrPlanner;
   CHolonomicPathPlanning* (*constructor_table[10]) (int theStartDummyID, int theGoalDummyID,

@@ -149,14 +149,15 @@ void CHolonomicPathNode::interpolate(CHolonomicPathNode* from, float t, float an
 
     float l = sqrtf(vect[0] * vect[0] + vect[1] * vect[1] + vect[2] * vect[2]);
     float bound = t / l;
-/*
+
     values[0] = vect[0] * bound + from->values[0];
     values[1] = vect[1] * bound + from->values[1];
     values[2] = vect[2] * bound + from->values[2];
-    */
+		/*
     for (int i = 0; i < 3; i++) {
       values[i] = from->values[i] * (1.0 - bound) + values[i] * bound;
     }
+		*/
   } else if (_nodeType == sim_holonomicpathplanning_xyg) {
     vect[0] = values[0] - from->values[0];
     vect[1] = values[1] - from->values[1];
@@ -168,8 +169,7 @@ void CHolonomicPathNode::interpolate(CHolonomicPathNode* from, float t, float an
 
     values[0] = vect[0] * bound + from->values[0];
     values[1] = vect[1] * bound + from->values[1];
-    values[2] = CPathPlanningInterface::getNormalizedAngle(
-          vect[2] * bound + from->values[2]);
+    values[2] = CPathPlanningInterface::getNormalizedAngle(vect[2] * bound + from->values[2]);
   } else if (_nodeType == sim_holonomicpathplanning_xyzabg) {
     vect[0] = values[0] - from->values[0];
     vect[1] = values[1] - from->values[1];

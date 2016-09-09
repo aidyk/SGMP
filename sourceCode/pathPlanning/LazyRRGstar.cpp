@@ -65,14 +65,17 @@ using namespace std::placeholders;
 // #define RRG
 
 #define CACHING
-// #define DYNAMIC
+#define DYNAMIC
+// #define NEW_DYNAMIC
+// #define INIT
 #define TIME
 #define ONCE
 // #define ANN
 // #define MYNN
-#define PRUNING_V
-#define KNN // if MYNN is enabled, disabled.
-#define NN_CACHE
+#define PRUNING_V // might be useful when solution space is quite simple... but not in ours.
+// #define SUBTREE
+// #define KNN // if MYNN is enabled, disabled.
+// #define NN_CACHE
 #define VIS
 #define TREE_VIS
 
@@ -166,6 +169,12 @@ LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
 	_nn->add(_goal_node);
 #endif
 
+#ifdef SUBTREE
+	for (unsigned int i = 0 ; i < 100; i++)
+		_depth_table.push_back(0);
+	_depth_table[0] = 1;
+#endif
+
 	_best_cost = SIM_MAX_FLOAT;
 
   // Initialize distance to the nearest collision-free space to MAX
@@ -203,18 +212,12 @@ LazyRRGstar::~LazyRRGstar() {
   }
 }
 
-
 float LazyRRGstar::getNearNeighborK() {
 	return ceil(_kConstant * log(1.0 + _nn->size()));
 }
 
 float LazyRRGstar::getNearNeighborRadius() {
-  // return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + fromStart.size()) / (1.0 + fromStart.size()), 0.33));
-    //if (planningType == sim_holonomicpathplanning_xyzabg) {
-    //  return SIM_MIN(_ballRadiusMax, _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 0.1666));
-    //} else {
-	return _ballRadiusConst * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 1.0 / _dimension);
-  //}
+	return _rConstant * pow(log(1.0 + _nn->size()) / (1.0 + _nn->size()), 1.0 / _dimension);
 }
 
 float LazyRRGstar::distance(LazyRRGstarNode* a, LazyRRGstarNode* b) {
@@ -415,7 +418,7 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 
 int LazyRRGstar::searchPath(int maxTimePerPass) {
 #ifdef TIME
-  FILE *tfp = fopen("time_lapse.txt", "a");
+	FILE *tfp = fopen("time_lapse.log", "a");
   int break_point = 1000;
 #endif
 
@@ -445,18 +448,18 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 		spaceMeasure *= _searchRange[3];
 		spaceMeasure *= angularCoeff * CONST_PI * CONST_PI;
 	}
-	spaceMeasure = sqrt(spaceMeasure);
+	spaceMeasure = sqrt(spaceMeasure); // Still way too bigger than k-nn
 
 	float unitNBallMeasure = std::pow(sqrt(CONST_PI), _dimension) / (std::tgamma(static_cast<double>(_dimension) / 2.0 + 1.0));
 
 	// r_rrg > 2*(1+1/d)^(1/d)*(measure/ballvolume)^(1/d)
-	_ballRadiusConst = _rewireFactor * 2.0 * std::pow((1.0 + 1.0/_dimension) * (spaceMeasure / unitNBallMeasure), 1.0 / _dimension);
+	_rConstant = _rewireFactor * 2.0 * std::pow((1.0 + 1.0/_dimension) * (spaceMeasure / unitNBallMeasure), 1.0 / _dimension);
 
 	// k_rrg > e+e/d.
 	_kConstant = _rewireFactor * (CONST_E + CONST_E / _dimension);
 
 	puts("");
-	printf("rConstant :%f \nkConstant : %f\n", _ballRadiusConst, _kConstant);
+	printf("rConstant :%f \nkConstant : %f\n", _rConstant, _kConstant);
 	printf("Initial sampling_radius : %f \tInitial distance %f\n", getNearNeighborRadius(), distance(_start_node, _goal_node));
 
 	// maxTimePerPass is in miliseconds
@@ -490,7 +493,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 		if (_simGetTimeDiffInMs(initTime) >= break_point) {
 			float bc = _goal_node->getCost();
 			fprintf(tfp, "%f\t%d\t%d\t%d\t%d\t%d\t%d\n", bc, _collision_detection_count, _dynamic_increase_count,
-							_collision_detection_time, _dynamic_increase_time, _dynamic_decrease_time, _near_neighbor_search_time);
+							_collision_detection_time, _dynamic_decrease_time, _dynamic_increase_time, _near_neighbor_search_time);
 			break_point += 1000;
 		}
 #endif
@@ -538,9 +541,9 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 
 		/*
 		float dist = distance(randNode, closest);
-    if (dist > _ballRadiusConst * _maxDistance) {
-      randNode->interpolate(closest, _ballRadiusConst * _maxDistance, angularCoeff);
-    }
+		if (dist > _rConstant * _maxDistance) {
+			randNode->interpolate(closest, _rConstant * _maxDistance, angularCoeff);
+		}
 		*/
 #endif
 
@@ -622,13 +625,25 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 #ifdef TIME
     _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
+#ifdef INIT
+		for (unsigned int i = 0; i < neighbors.size(); i++) {
+			if (neighbors[i]->witness != NULL) {
+				float dist_to_witness = distance(extended, neighbors[i]->witness);
+
+				if (extended->witness == NULL || extended->free_radius > dist_to_witness) {
+					extended->free_radius = dist_to_witness;
+					extended->witness = neighbors[i]->witness;
+				}
+			}
+		}
+#endif
 
 // <LazyChooseParent
     for (unsigned int i = 0; i < neighbors.size(); i++) {
 #ifdef RRG
       dummy = extend(extended, neighbors[i], true, startDummy, artificialCost);
 #else
-      dummy = lazyExtend(extended, neighbors[i], true, startDummy, artificialCost);
+			dummy = lazyExtend(extended, neighbors[i], true, startDummy, artificialCost);
 #endif
       // dummy ignored
 
@@ -641,6 +656,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 			neighbors[i]->addNode(extended, artificialCost);
 
 #ifdef DYNAMIC
+#ifndef INIT
 			if (neighbors[i]->witness != NULL) {
         float dist_to_witness = distance(extended, neighbors[i]->witness);
 
@@ -649,6 +665,7 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
           extended->witness = neighbors[i]->witness;
         }
       }
+#endif
 #endif
 
 			// ChooseParent
@@ -660,7 +677,12 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 
     if (extended->pred != NULL) { // Update children infomation later.
       extended->pred->addChild(extended);
-    }
+#ifdef SUBTREE
+			// extended->pred is originally null.
+			extended->depth = extended->pred->depth + 1;
+			_depth_table[extended->depth] += 1;
+#endif
+		}
 
 // >
 #ifdef TIME
@@ -782,8 +804,8 @@ void LazyRRGstar::DynamicDecrease(LazyRRGstarNode *node) {
         neighbor->setCost(node->getCost() + c);
 
         if (neighbor->pred != NULL) {
-          neighbor->pred->removeChild((neighbor));
-        }
+					neighbor->pred->removeChild(neighbor);
+				}
         neighbor->pred = node;
         neighbor->isCollisionFree(false);
         node->addChild(neighbor);
@@ -836,7 +858,11 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
 
         if (node->pred != NULL) {
           node->pred->removeChild(node);
-        }
+				}
+#ifdef SUBTREE
+				node->depth = neighbor->depth + 1;
+				_depth_table[node->depth] += 1;
+#endif
         node->pred = neighbor;
         node->isCollisionFree(false);
         neighbor->addChild(node);
@@ -864,7 +890,7 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
       reds[i]->pred->removeChild(reds[i]);
       reds[i]->pred = NULL;
       reds[i]->isCollisionFree(false);
-    }
+		}
 
     for (unsigned int j = 0; j < edges.size(); j++) {
       LazyRRGstarNode *neighbor = edges[j].node();
@@ -877,7 +903,11 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
     }
     if (reds[i]->pred != NULL) {
       (reds[i]->pred)->addChild(reds[i]);
-    }
+#ifdef SUBTREE
+			reds[i]->depth = reds[i]->pred->depth + 1;
+			_depth_table[reds[i]->depth] += 1;
+#endif
+		}
     // Need to be verified.
 		pq.push(weight_node(-reds[i]->getCost(), reds[i]));
   }
@@ -902,7 +932,11 @@ void LazyRRGstar::DynamicIncrease(LazyRRGstarNode *from, LazyRRGstarNode *to) {
         neighbor->setCost(cost + edges[i].cost());
         if (neighbor->pred != NULL) {
           neighbor->pred->removeChild(neighbor);
-        }
+				}
+#ifdef SUBTREE
+				neighbor->depth = node->depth + 1;
+				_depth_table[neighbor->depth] += 1;
+#endif
         neighbor->pred = node;
         neighbor->isCollisionFree(false);
         node->addChild(neighbor);
@@ -1027,8 +1061,8 @@ bool LazyRRGstar::setPartialPath() {
   printf("DD : %d // DI : %d\n", _dynamic_decrease_count, _dynamic_increase_count);
   printf("Final solution cost : %f\n", _best_cost);
   printf("Collision Detection : %d\n", _collision_detection_count);
-	printf("knn radius : %f\n", getNearNeighborK());
-	printf("rnn radius : %f\n", getNearNeighborRadius());
+	printf("k_rrg : %f\n", getNearNeighborK());
+	printf("r_rrg : %f\n", getNearNeighborRadius());
 
   FILE *ofp = NULL;
   char file_name[256] = "LazyRRGstar";
@@ -1168,16 +1202,25 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
 	int elapsed_time = simGetSystemTimeInMs(-1);
 #endif
 	LazyRRGstarNode* extended = from->copyYourself();
+
 	float theVect[7] = {0.0, };
 	int passes = getVector(from, to, theVect, stepSize, artificialCost, false);
 
 #ifndef DYNAMIC
 	_skipped_collision_detection_count += passes;
-  artificialCost = distance(from, to);
 	_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
 	return extended;
 #endif
 
+#ifdef SUBTREE
+	if (shouldBeLazy(from, to)) {
+		_skipped_collision_detection_count += passes;
+		_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+		return extended;
+	}
+#endif
+
+#ifndef NEW_DYNAMIC
   int currentPass;
   float delta_magnitude = artificialCost / passes;
   float magnitude = 0.0f;
@@ -1211,35 +1254,78 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
       continue;
     }
 
-    C7Vector transf(orient, pos);
-    C7Vector tmpTr(_startDummyLTM * transf);
-    _simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
-    if (doCollide(NULL)) { // Collision Check
-      extended->setAllValues(pos, orient);
-      LazyRRGstarNode *witness = extended;
-#ifdef DYNAMIC
-      from->updateWitness(magnitude, witness);
-      to->updateWitness(artificialCost - magnitude, witness);
-#endif
-      if (shouldBeConnected) {
-        // delete extended;
+		C7Vector transf(orient, pos);
+		C7Vector tmpTr(_startDummyLTM * transf);
+		_simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
+		if (doCollide(NULL)) { // Collision Check
+			if (shouldBeConnected) {
+				// delete extended;
 #ifdef TIME
-    _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+				_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
-        return(NULL);
-      }
-      break;
-    } else {
+				return(NULL);
+			}
+			break;
+		} else {
 #ifdef ONCE
-      break;
+			break;
 #endif
-    }
-  }
-
+		}
+	}
+#else
+	if (artificialCost < from->free_radius + to->free_radius) {
 #ifdef TIME
+		_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
+		return extended;
+	} else {
+		// 1.0 : to, 0.0 : extended
+		extended->interpolate(to, from->free_radius, angularCoeff);
+	}
+
+	C3Vector pos(extended->values);
+	C4Vector orient(extended->values + 3);
+	if (planningType == sim_holonomicpathplanning_xyz || planningType == sim_holonomicpathplanning_xy) {
+		orient.setIdentity();
+	} else if (planningType == sim_holonomicpathplanning_xyg) {
+		orient = _gammaAxisRotation * C4Vector(C3Vector(0.0f, 0.0f, pos(2))) * _gammaAxisRotationInv;
+		pos(2) = 0.0;
+	}
+
+	C7Vector transf(orient, pos);
+	C7Vector tmpTr(_startDummyLTM * transf);
+	_simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
+	if (doCollide(NULL)) { // Collision Check
+#ifdef DYNAMIC
+		from->updateWitness(from->free_radius, extended); // Never changes
+		to->updateWitness(artificialCost - from->free_radius, extended);
+#endif
+		if (shouldBeConnected) {
+			// delete extended;
+#ifdef TIME
+			_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
+#endif
+			return(NULL);
+		}
+	}
+
+#endif
+		#ifdef TIME
     _collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
   return extended;
+}
+
+bool LazyRRGstar::shouldBeLazy(LazyRRGstarNode* from, LazyRRGstarNode* to) {
+	float degree_ratio = (float)to->children().size() / (float)_depth_table[to->depth];
+	int size_of_subtree = 0, depth = to->depth;
+	while (_depth_table[depth] > 0) {
+		size_of_subtree += _depth_table[depth++];
+	}
+
+	if (size_of_subtree * degree_ratio < _subtreeThreshold) // Small enough to be lazy
+		return true;
+	return false;
 }
 
 bool LazyRRGstar::isFree(LazyRRGstarNode* node, CDummyDummy* dummy) {
