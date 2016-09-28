@@ -119,6 +119,7 @@ private:
 	float _dimension;
 	std::vector<int> _nn_cache;
 	std::vector<int> _depth_table;
+	std::vector<LazyRRGstarNode*> _witnesses;
 
   // <For evaluation
   int _skipped_collision_detection_count;

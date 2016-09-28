@@ -66,7 +66,7 @@ using namespace std::placeholders;
 
 #define CACHING
 #define DYNAMIC
-// #define NEW_DYNAMIC
+// #define NEW_DYNAMIC // Only 'from'
 // #define INIT
 #define TIME
 #define ONCE
@@ -77,7 +77,7 @@ using namespace std::placeholders;
 // #define KNN // if MYNN is enabled, disabled.
 // #define NN_CACHE
 #define VIS
-#define TREE_VIS
+// #define TREE_VIS
 
 LazyRRGstar::LazyRRGstar(int theStartDummyID, int theGoalDummyID,
                                int theRobotCollectionID, int theObstacleCollectionID, int ikGroupID,
@@ -274,11 +274,8 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 	_nn->list(cont);
 #endif
 
-#ifndef TREE_VIS
-	return;
-#endif
-
 	if (fromTheStart) {
+#ifdef TREE_VIS
 		if ( (planningType == sim_holonomicpathplanning_xy) || (planningType == sim_holonomicpathplanning_xyg) || (planningType == sim_holonomicpathplanning_xyabg) ) {
 			for (int i = 0; i < int(cont.size()); i++) {
 				if (cont[i]->pred == NULL) continue;
@@ -320,6 +317,7 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 					data.push_back(d[j]);
 			}
 		}
+#endif
 	} else { // !fromTheStart - Blue-colored
 
 #ifdef VIS
@@ -332,6 +330,17 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 
 		std::sort(node_list.begin(), node_list.end(), cmpVis);
 
+		float min_value = node_list.front()->free_radius, max_value;
+		float half_max_value = (max_value + min_value) / 2.0;
+
+		for (int i = node_list.size() - 1; i >= 0; i--) {
+			if (node_list[i]->free_radius < 9824578.0f) {
+				max_value = node_list[i]->free_radius;
+				break;
+			}
+		}
+
+		printf("Colorful! %f:%f\n", min_value, max_value);
 		float ambient_color[3] = {1.0, 1.0, 1.0};
 		simInt point_container = simAddDrawingObject(sim_drawing_points + sim_drawing_itemcolors + sim_drawing_overlay
 																								 , 4, 0.0, -1, 1000000, NULL, NULL, NULL, NULL);
@@ -345,9 +354,26 @@ void LazyRRGstar::getSearchTreeData(std::vector<float>& data, bool fromTheStart)
 				pos.set(it->values[0], it->values[1], it->values[2]);
 			}
 			pos = _startDummyCTM * pos;
-			float point_data[6] = {pos.data[0], pos.data[1], pos.data[2], i / (float)node_list.size(),  i / (float)node_list.size(), i / (float)node_list.size()};
+			// float point_data[6] = {pos.data[0], pos.data[1], pos.data[2], i / (float)node_list.size(),  i / (float)node_list.size(), i / (float)node_list.size()};
+			float ratio = 2 * (it->free_radius  - min_value) / (max_value - min_value);
+			float b = std::max(0.0f, ratio - 1), r = std::max(0.0f, 1 - ratio), g = 1.0 - r - b;
+			float point_data[6] = {pos.data[0], pos.data[1], pos.data[2], r, g, b};
 			simAddDrawingObjectItem(point_container, point_data);
 		}
+
+		for (unsigned int i = 0; i < _witnesses.size(); i++) {
+			LazyRRGstarNode* it = _witnesses[i];
+			C3Vector pos;
+			if (planningType == sim_holonomicpathplanning_xyg) {
+				pos.set(it->values[0], it->values[1], 0.0);
+			} else {
+				pos.set(it->values[0], it->values[1], it->values[2]);
+			}
+			pos = _startDummyCTM * pos;
+			float point_data[6] = {pos.data[0], pos.data[1], pos.data[2], 0.0, 0.0, 0.0};
+			simAddDrawingObjectItem(point_container, point_data);
+		}
+
 #endif
 		return;
 		/*
@@ -625,18 +651,6 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 #ifdef TIME
     _near_neighbor_search_time += _simGetTimeDiffInMs(elapsed_time);
 #endif
-#ifdef INIT
-		for (unsigned int i = 0; i < neighbors.size(); i++) {
-			if (neighbors[i]->witness != NULL) {
-				float dist_to_witness = distance(extended, neighbors[i]->witness);
-
-				if (extended->witness == NULL || extended->free_radius > dist_to_witness) {
-					extended->free_radius = dist_to_witness;
-					extended->witness = neighbors[i]->witness;
-				}
-			}
-		}
-#endif
 
 // <LazyChooseParent
     for (unsigned int i = 0; i < neighbors.size(); i++) {
@@ -683,6 +697,19 @@ int LazyRRGstar::searchPath(int maxTimePerPass) {
 			_depth_table[extended->depth] += 1;
 #endif
 		}
+
+#ifdef INIT
+		for (unsigned int i = 0; i < neighbors.size(); i++) {
+			if (neighbors[i]->witness != NULL) {
+				float dist_to_witness = distance(extended, neighbors[i]->witness);
+
+				if (extended->witness == NULL || extended->free_radius > dist_to_witness) {
+					extended->free_radius = dist_to_witness;
+					extended->witness = neighbors[i]->witness;
+				}
+			}
+		}
+#endif
 
 // >
 #ifdef TIME
@@ -735,7 +762,7 @@ void LazyRRGstar::DynamicShortestPathUpdate(CDummyDummy *startDummy) {
       if (to->isCollisionFree()) continue;
 #endif
       float artificialCost;
-      LazyRRGstarNode* dummy = extend(from, to, true, startDummy, artificialCost);
+			LazyRRGstarNode* dummy = extend(from, to, true, startDummy, artificialCost);
       if (dummy == NULL) { // collision found
         // Remove invalid edge and handle other things to maintain the shortestpath tree.
         from->removeNode(to);
@@ -1151,10 +1178,12 @@ LazyRRGstarNode* LazyRRGstar::extend(LazyRRGstarNode* from, LazyRRGstarNode* to,
     if (doCollide(NULL)) { // Collision Check
 #ifdef DYNAMIC
       extended->setAllValues(pos, orient);
-      LazyRRGstarNode *witness = extended->copyYourself();
-
-      from->updateWitness(magnitude, witness);
-      to->updateWitness(artificialCost - magnitude, witness);
+			LazyRRGstarNode *witness = extended->copyYourself();
+#ifdef VIS
+			_witnesses.push_back(witness);
+#endif
+			from->updateWitness(magnitude, witness);
+			to->updateWitness(artificialCost - magnitude, witness);
 #endif
       if (shouldBeConnected) {
         // delete extended;
@@ -1258,6 +1287,13 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
 		C7Vector tmpTr(_startDummyLTM * transf);
 		_simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
 		if (doCollide(NULL)) { // Collision Check
+			extended->setAllValues(pos, orient);
+			LazyRRGstarNode *witness = extended->copyYourself();
+#ifdef VIS
+			_witnesses.push_back(witness);
+#endif
+			from->updateWitness(magnitude, witness);
+			to->updateWitness(artificialCost - magnitude, witness);
 			if (shouldBeConnected) {
 				// delete extended;
 #ifdef TIME
@@ -1273,6 +1309,7 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
 		}
 	}
 #else
+
 	if (artificialCost < from->free_radius + to->free_radius) {
 #ifdef TIME
 		_collision_detection_time += _simGetTimeDiffInMs(elapsed_time);
@@ -1280,7 +1317,12 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
 		return extended;
 	} else {
 		// 1.0 : to, 0.0 : extended
-		extended->interpolate(to, from->free_radius, angularCoeff);
+		if (from->witness == NULL && to->witness == NULL)
+			return extended;
+		else if (from->witness != NULL)
+			extended->interpolate(to, from->free_radius, angularCoeff);
+		else // to->witness != NULL
+			extended->interpolate(to, artificialCost - to->free_radius, angularCoeff);
 	}
 
 	C3Vector pos(extended->values);
@@ -1296,10 +1338,6 @@ LazyRRGstarNode* LazyRRGstar::lazyExtend(LazyRRGstarNode* from, LazyRRGstarNode*
 	C7Vector tmpTr(_startDummyLTM * transf);
 	_simSetObjectLocalTransformation(dummy, tmpTr.X.data, tmpTr.Q.data);
 	if (doCollide(NULL)) { // Collision Check
-#ifdef DYNAMIC
-		from->updateWitness(from->free_radius, extended); // Never changes
-		to->updateWitness(artificialCost - from->free_radius, extended);
-#endif
 		if (shouldBeConnected) {
 			// delete extended;
 #ifdef TIME
